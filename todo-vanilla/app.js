@@ -130,9 +130,18 @@ function getWeekDates(dateString) {
   return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
 }
 
-// 특정 날짜의 Todo 개수
+// 특정 날짜의 Todo 개수를 "완료 / 전체"로 함께 반환한다.
+// 두 값을 따로 계산하면 같은 배열을 두 번 도는 셈이라
+// 한 번 돌면서 두 값을 동시에 누적한다.
 function countTodosByDate(dateString) {
-  return todos.filter((todo) => todo.date === dateString).length;
+  let total = 0;
+  let completed = 0;
+  for (const todo of todos) {
+    if (todo.date !== dateString) continue;
+    total += 1;
+    if (todo.completed) completed += 1;
+  }
+  return { total, completed };
 }
 
 /* ===========================
@@ -266,8 +275,16 @@ function createWeekDayElement(dateString, weekdayIndex, todayString) {
 
   const $count = document.createElement("span");
   $count.className = "week-view__day-count";
-  const count = countTodosByDate(dateString);
-  $count.textContent = count > 0 ? `${count}개` : "";
+  const { total, completed } = countTodosByDate(dateString);
+  if (total === 0) {
+    // 그 날 등록된 Todo 가 없으면 자리만 비워둔다.
+    $count.textContent = "";
+  } else {
+    // "완료 / 전체" 비율로 한 줄에 진행도를 보여준다.
+    $count.textContent = `${completed}/${total}`;
+    // 모두 완료된 날은 흐리게 처리해 "끝난 날"임을 한눈에 보이게.
+    if (completed === total) $count.classList.add("is-all-done");
+  }
 
   $item.append($weekday, $dayNumber, $count);
   return $item;
