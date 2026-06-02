@@ -109,6 +109,40 @@ ul {
 }
 
 /* ===========================
+   필터 바
+   - 3개 탭이 가로로 균등 분배
+   =========================== */
+.filter-bar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.filter-bar__button {
+  flex: 1;
+  padding: var(--space-2) 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.filter-bar__button:hover {
+  color: var(--color-primary);
+}
+
+/* 현재 선택된 필터: 메인 컬러 톤으로 강조 */
+.filter-bar__button.is-active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ===========================
    Todo 목록
    =========================== */
 .todo-list__item {

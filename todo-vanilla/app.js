@@ -1,11 +1,23 @@
 /**
- * Vanilla Todo - 기본 CRUD
+ * Vanilla Todo - CRUD + 상태별 필터링
  *
  * 흐름
- *   사용자 액션 → todos 상태 변경 → render() 호출 → 화면이 todos 그대로 다시 그려진다.
- *   "상태가 단 하나의 출처(todos)이고, 화면은 그 결과물"이라는 원칙을 지킨다.
- *   이렇게 짜두면 이후 React 전환 시 그대로 옮길 수 있다.
+ *   사용자 액션 → 상태(todos / currentFilter) 변경 → render() 호출 → 화면이 다시 그려진다.
+ *   "상태가 단 하나의 출처이고, 화면은 그 결과물"이라는 원칙을 지킨다.
+ *
+ *   필터링은 "원본 todos는 그대로 두고, 그릴 때만 걸러서 보여준다"는 관점으로 구현한다.
+ *   → 필터를 바꿔도 데이터는 손상되지 않는다.
  */
+
+/* ===========================
+   상수
+   =========================== */
+// 필터 값은 문자열을 직접 쓰면 오타가 나기 쉬워 상수로 모아둔다.
+const FILTERS = {
+  ALL: "all",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+};
 
 /* ===========================
    상태
@@ -13,19 +25,39 @@
 // Todo 객체 형태: { id: number, text: string, completed: boolean }
 let todos = [];
 
+// 현재 선택된 필터. 기본값은 "전체".
+let currentFilter = FILTERS.ALL;
+
 /* ===========================
    DOM 참조
-   - 자주 쓰는 엘리먼트는 미리 캐싱
    =========================== */
 const $form = document.getElementById("todo-form");
 const $input = document.getElementById("todo-input-field");
 const $message = document.getElementById("input-message");
 const $list = document.getElementById("todo-list");
 const $emptyMessage = document.getElementById("empty-message");
+const $filterButtons = document.querySelectorAll(".filter-bar__button");
+
+/* ===========================
+   순수 함수
+   - 입력만 받아 결과를 반환. DOM이나 외부 상태를 만지지 않는다.
+   - 테스트하기 쉽고, 이후 React로 옮길 때도 그대로 재사용된다.
+   =========================== */
+
+// 현재 필터를 적용해 "보여줄 todos"를 반환한다.
+function getVisibleTodos() {
+  if (currentFilter === FILTERS.ACTIVE) {
+    return todos.filter((todo) => !todo.completed);
+  }
+  if (currentFilter === FILTERS.COMPLETED) {
+    return todos.filter((todo) => todo.completed);
+  }
+  return todos; // "all"
+}
 
 /* ===========================
    액션 함수 (Create / Update / Delete)
-   - 상태(todos)만 바꾸고, 마지막에 render()를 호출한다.
+   - 상태(todos)만 바꾸고, 마지막에 render() 호출
    =========================== */
 
 // 새 Todo를 만든다.
@@ -39,12 +71,11 @@ function addTodo(text) {
   }
 
   todos.push({
-    id: Date.now(), // 시간 기반 고유 id (수정/삭제 시 식별자로 사용)
+    id: Date.now(), // 시간 기반 고유 id
     text: trimmed,
     completed: false,
   });
 
-  // 입력 후 정리
   $message.textContent = "";
   $input.value = "";
   render();
@@ -65,7 +96,7 @@ function editTodo(id) {
 
   const nextText = prompt("수정할 내용을 입력하세요.", target.text);
 
-  // 취소(null)나 공백만 입력한 경우엔 기존 값을 유지
+  // 취소(null)나 공백만 입력한 경우 기존 값을 유지
   if (nextText === null) return;
   const trimmed = nextText.trim();
   if (!trimmed) return;
@@ -82,21 +113,56 @@ function deleteTodo(id) {
   render();
 }
 
+// 필터를 바꾼다. 원본 todos는 건드리지 않는다.
+function setFilter(nextFilter) {
+  // 알 수 없는 값이 들어오면 무시 (방어적 처리)
+  const allowed = Object.values(FILTERS);
+  if (!allowed.includes(nextFilter)) return;
+
+  currentFilter = nextFilter;
+  render();
+}
+
 /* ===========================
    렌더 (Read)
-   - 현재 todos를 바탕으로 화면을 다시 그린다.
-   - 매번 innerHTML을 비우고 새로 그리는 단순한 방식.
-     (Todo 수가 적으므로 성능 이슈 없음)
+   - render() 한 번이 화면 전체를 다시 그리는 진입점.
+   - 세부 렌더는 책임별로 작은 함수로 분리한다.
    =========================== */
 function render() {
-  $list.innerHTML = "";
+  renderFilterButtons();
+  renderTodoList();
+}
 
-  todos.forEach((todo) => {
+// 필터 버튼의 활성 상태를 현재 필터에 맞춰 동기화한다.
+function renderFilterButtons() {
+  $filterButtons.forEach(($button) => {
+    const isActive = $button.dataset.filter === currentFilter;
+    $button.classList.toggle("is-active", isActive);
+    // 접근성: 스크린리더에 현재 선택된 탭임을 알린다.
+    $button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+// 필터링된 결과를 화면에 그린다.
+function renderTodoList() {
+  const visibleTodos = getVisibleTodos();
+
+  $list.innerHTML = "";
+  visibleTodos.forEach((todo) => {
     $list.appendChild(createTodoElement(todo));
   });
 
-  // 목록이 비었을 때만 빈 상태 메시지 표시
-  $emptyMessage.hidden = todos.length !== 0;
+  // 빈 상태 메시지는 "현재 필터 기준" 결과가 0개일 때 표시.
+  // (전체 데이터는 있는데 "완료" 탭만 비어 있는 경우도 자연스럽게 처리됨)
+  $emptyMessage.hidden = visibleTodos.length !== 0;
+  $emptyMessage.textContent = getEmptyMessageText();
+}
+
+// 필터에 따라 빈 상태 안내 문구를 다르게 보여준다.
+function getEmptyMessageText() {
+  if (currentFilter === FILTERS.ACTIVE) return "진행 중인 할 일이 없습니다.";
+  if (currentFilter === FILTERS.COMPLETED) return "완료된 할 일이 없습니다.";
+  return "등록된 할 일이 없습니다.";
 }
 
 // Todo 하나에 해당하는 <li>를 만든다.
@@ -111,7 +177,6 @@ function createTodoElement(todo) {
   $text.className = "todo-list__text";
   $text.textContent = todo.text;
 
-  // 수정 버튼
   const $editButton = document.createElement("button");
   $editButton.type = "button";
   $editButton.className = "todo-list__action";
@@ -125,7 +190,6 @@ function createTodoElement(todo) {
   $toggleButton.dataset.action = "toggle";
   $toggleButton.textContent = todo.completed ? "되돌리기" : "완료";
 
-  // 삭제 버튼
   const $deleteButton = document.createElement("button");
   $deleteButton.type = "button";
   $deleteButton.className = "todo-list__action is-danger";
@@ -152,7 +216,6 @@ $input.addEventListener("input", () => {
 });
 
 // 리스트 클릭은 부모 ul에 한 번만 바인딩 (이벤트 위임).
-// li마다 리스너를 달 필요가 없어 효율적이고, 새로 렌더된 항목에도 자동 적용된다.
 $list.addEventListener("click", (event) => {
   const $button = event.target.closest("button[data-action]");
   if (!$button) return;
@@ -166,6 +229,13 @@ $list.addEventListener("click", (event) => {
   if (action === "edit") editTodo(id);
   if (action === "toggle") toggleTodo(id);
   if (action === "delete") deleteTodo(id);
+});
+
+// 필터 버튼 클릭: 각 버튼의 data-filter 값을 그대로 setFilter에 넘긴다.
+$filterButtons.forEach(($button) => {
+  $button.addEventListener("click", () => {
+    setFilter($button.dataset.filter);
+  });
 });
 
 /* ===========================
