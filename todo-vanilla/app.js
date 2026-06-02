@@ -1,18 +1,15 @@
 /**
- * Vanilla Todo - CRUD + 필터 + 일간 뷰
+ * Vanilla Todo - CRUD + 필터 + 일간 뷰 + localStorage
  *
- * 흐름
- *   사용자 액션 → 상태(todos / currentFilter / selectedDate) 변경
- *               → render() 호출 → 화면이 다시 그려진다.
+ * 영속화 설계
+ *   - 단일 진실의 출처는 여전히 메모리상의 todos 배열.
+ *   - todos 가 바뀔 때마다 localStorage 에도 같은 내용을 저장한다.
+ *   - 페이지 로드 시 localStorage 에서 한 번 불러와 todos 의 초기값으로 쓴다.
  *
- * 일간 뷰 설계
- *   - todos 배열은 모든 날짜의 Todo를 한 곳에 모아둔다.
- *   - 화면에 그릴 때 selectedDate와 일치하는 Todo만 걸러낸다.
- *   - 데이터(저장용)와 표시(사용자용) 포맷을 분리한다:
- *       저장 / 비교: "YYYY-MM-DD" 문자열
- *       표시:        "YYYY년 M월 D일 (요일)"
- *   - 날짜 계산은 반드시 로컬 시간 기준. toISOString()은 UTC라 한국 시간에서
- *     하루 밀릴 수 있으므로 사용하지 않는다.
+ *   객체/배열은 그대로 저장할 수 없으므로 JSON.stringify 로 직렬화,
+ *   불러올 때 JSON.parse 로 역직렬화한다.
+ *
+ *   손상된 JSON이 있더라도 앱이 멈추지 않도록 try/catch 로 감싼다.
  */
 
 /* ===========================
@@ -24,20 +21,51 @@ const FILTERS = {
   COMPLETED: "completed",
 };
 
-// 요일 표시용 (Date.getDay() 결과 0~6에 매핑)
+// Date.getDay() 결과(0~6)를 사람이 읽는 문자로 매핑
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+// localStorage 키. 다른 키와 충돌하지 않도록 앱 이름 prefix 를 붙인다.
+const STORAGE_KEY = "vanilla-todo:todos";
+
+/* ===========================
+   localStorage 연동
+   - todos 배열을 JSON 문자열로 저장/복원한다.
+   =========================== */
+
+// 저장된 todos 를 읽어온다. 없거나 깨졌으면 빈 배열을 반환한다.
+function loadTodos() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    // 혹시 배열이 아닌 값이 저장돼 있으면 무시한다.
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch (error) {
+    // 깨진 JSON 등 예외 상황: 콘솔에만 남기고 빈 배열로 시작한다.
+    console.warn("localStorage 에서 todos 를 불러오지 못했습니다.", error);
+    return [];
+  }
+}
+
+// 현재 todos 를 JSON 문자열로 저장한다.
+function saveTodos() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  } catch (error) {
+    // 용량 초과 등으로 실패해도 메모리상 상태는 유지된다.
+    console.warn("localStorage 에 todos 를 저장하지 못했습니다.", error);
+  }
+}
 
 /* ===========================
    상태
    =========================== */
-// Todo 객체 형태: { id: number, text: string, completed: boolean, date: "YYYY-MM-DD" }
-let todos = [];
-
-// 현재 선택된 필터.
+// Todo 객체 형태: { id, text, completed, date }
+let todos = loadTodos(); // 페이지 로드 시 한 번 복원
 let currentFilter = FILTERS.ALL;
-
-// 현재 선택된 날짜. 초기값은 "오늘".
-let selectedDate = formatDate(new Date());
+let selectedDate = formatDate(new Date()); // 초기값: 오늘
 
 /* ===========================
    DOM 참조
@@ -54,11 +82,9 @@ const $nextDayButton = document.getElementById("next-day-button");
 
 /* ===========================
    순수 함수: 날짜 유틸
-   - DOM과 외부 상태를 만지지 않는다.
    =========================== */
 
-// Date 객체를 "YYYY-MM-DD" 문자열로 변환한다 (로컬 시간 기준).
-// toISOString()은 UTC라 한국 시간에서 하루 밀릴 수 있으므로 직접 만든다.
+// Date → "YYYY-MM-DD" (로컬 시간 기준)
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -66,22 +92,20 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-// "YYYY-MM-DD" 문자열을 로컬 자정 Date 객체로 되돌린다.
+// "YYYY-MM-DD" → Date (로컬 자정)
 function parseDate(dateString) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-// 날짜 문자열에 일수를 더하거나 빼서 새 문자열을 반환한다.
-//   shiftDate("2026-06-02", 1)  // "2026-06-03"
-//   shiftDate("2026-06-02", -1) // "2026-06-01"
+// 날짜 문자열에 일수를 더하거나 빼서 새 문자열을 반환
 function shiftDate(dateString, deltaDays) {
   const next = parseDate(dateString);
   next.setDate(next.getDate() + deltaDays);
   return formatDate(next);
 }
 
-// 사람이 보기 좋은 라벨로 변환한다. 예: "2026년 6월 2일 (화)"
+// 사람이 보기 좋은 라벨로 변환. 예: "2026년 6월 2일 (화)"
 function formatDateLabel(dateString) {
   const date = parseDate(dateString);
   const year = date.getFullYear();
@@ -95,11 +119,11 @@ function formatDateLabel(dateString) {
    순수 함수: 필터링
    =========================== */
 
-// 현재 selectedDate와 currentFilter를 모두 적용해 "보여줄 todos"를 반환한다.
+// selectedDate 와 currentFilter 를 모두 적용해 보여줄 todos 를 반환
 function getVisibleTodos() {
   return todos
-    .filter((todo) => todo.date === selectedDate) // 1) 날짜로 거르고
-    .filter((todo) => {                            // 2) 상태 필터로 다시 거른다
+    .filter((todo) => todo.date === selectedDate)
+    .filter((todo) => {
       if (currentFilter === FILTERS.ACTIVE) return !todo.completed;
       if (currentFilter === FILTERS.COMPLETED) return todo.completed;
       return true;
@@ -107,14 +131,12 @@ function getVisibleTodos() {
 }
 
 /* ===========================
-   액션 함수
-   - 상태만 바꾸고, 마지막에 render() 호출
+   액션
+   - 상태(todos) 변경 → saveTodos() → render() 순서를 지킨다.
    =========================== */
 
-// 새 Todo를 만든다. 현재 선택된 날짜를 함께 저장한다.
 function addTodo(text) {
   const trimmed = text.trim();
-
   if (!trimmed) {
     $message.textContent = "할 일을 입력해주세요.";
     return;
@@ -129,6 +151,7 @@ function addTodo(text) {
 
   $message.textContent = "";
   $input.value = "";
+  saveTodos();
   render();
 }
 
@@ -136,6 +159,7 @@ function toggleTodo(id) {
   todos = todos.map((todo) =>
     todo.id === id ? { ...todo, completed: !todo.completed } : todo
   );
+  saveTodos();
   render();
 }
 
@@ -151,25 +175,26 @@ function editTodo(id) {
   todos = todos.map((todo) =>
     todo.id === id ? { ...todo, text: trimmed } : todo
   );
+  saveTodos();
   render();
 }
 
 function deleteTodo(id) {
   todos = todos.filter((todo) => todo.id !== id);
+  saveTodos();
   render();
 }
 
 function setFilter(nextFilter) {
+  // 필터는 화면 상태일 뿐 데이터를 바꾸지 않으므로 저장하지 않는다.
   const allowed = Object.values(FILTERS);
   if (!allowed.includes(nextFilter)) return;
   currentFilter = nextFilter;
   render();
 }
 
-// 선택된 날짜를 deltaDays만큼 이동시킨다.
-//   shiftSelectedDay(-1) → 어제
-//   shiftSelectedDay(1)  → 내일
 function shiftSelectedDay(deltaDays) {
+  // 선택된 날짜도 화면 상태일 뿐 데이터를 바꾸지 않으므로 저장하지 않는다.
   selectedDate = shiftDate(selectedDate, deltaDays);
   render();
 }
@@ -183,7 +208,6 @@ function render() {
   renderTodoList();
 }
 
-// 날짜 바: 현재 선택된 날짜를 사람이 보기 좋은 라벨로 표시
 function renderDateBar() {
   $selectedDateLabel.textContent = formatDateLabel(selectedDate);
 }
@@ -208,7 +232,6 @@ function renderTodoList() {
   $emptyMessage.textContent = getEmptyMessageText();
 }
 
-// 빈 상태 문구를 현재 필터에 맞춰 다르게 보여준다.
 function getEmptyMessageText() {
   if (currentFilter === FILTERS.ACTIVE) return "진행 중인 할 일이 없습니다.";
   if (currentFilter === FILTERS.COMPLETED) return "완료된 할 일이 없습니다.";
@@ -281,7 +304,7 @@ $filterButtons.forEach(($button) => {
   });
 });
 
-// 날짜 이동: 이전 / 다음 버튼
+// 날짜 이동
 $prevDayButton.addEventListener("click", () => shiftSelectedDay(-1));
 $nextDayButton.addEventListener("click", () => shiftSelectedDay(1));
 
