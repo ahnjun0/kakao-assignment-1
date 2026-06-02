@@ -1,15 +1,15 @@
 /**
- * Vanilla Todo - CRUD + 필터 + 일간 뷰 + localStorage
+ * Vanilla Todo - CRUD + 필터 + 일간 뷰 + 주간 뷰 + localStorage
  *
- * 영속화 설계
- *   - 단일 진실의 출처는 여전히 메모리상의 todos 배열.
- *   - todos 가 바뀔 때마다 localStorage 에도 같은 내용을 저장한다.
- *   - 페이지 로드 시 localStorage 에서 한 번 불러와 todos 의 초기값으로 쓴다.
+ * 주간 뷰 설계
+ *   - 별도의 weekStart 상태를 두지 않고, selectedDate 하나만 진실의 출처로 유지한다.
+ *   - 화면에 그릴 주는 "selectedDate 가 속한 주의 월요일~일요일"로 매번 계산한다.
+ *   - 이전 주차 / 다음 주차 버튼은 selectedDate 를 ±7일 이동시킨다.
+ *     → 주가 자동으로 옮겨지고, 일간 뷰의 날짜 라벨도 함께 갱신된다.
+ *   - 셀 클릭 시 selectedDate 를 해당 날짜로 바꾼다.
  *
- *   객체/배열은 그대로 저장할 수 없으므로 JSON.stringify 로 직렬화,
- *   불러올 때 JSON.parse 로 역직렬화한다.
- *
- *   손상된 JSON이 있더라도 앱이 멈추지 않도록 try/catch 로 감싼다.
+ *   장점: 상태 동기화 이슈가 없다.
+ *   한계: "이번 주 보기"가 항상 selectedDate 를 따라간다. 의도와 일치한다.
  */
 
 /* ===========================
@@ -21,40 +21,34 @@ const FILTERS = {
   COMPLETED: "completed",
 };
 
-// Date.getDay() 결과(0~6)를 사람이 읽는 문자로 매핑
+// Date.getDay() 결과(0~6, 일=0) 매핑
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+// 주간 뷰는 월요일부터 시작하므로 표기 순서를 따로 만든다.
+const WEEK_VIEW_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
-// localStorage 키. 다른 키와 충돌하지 않도록 앱 이름 prefix 를 붙인다.
 const STORAGE_KEY = "vanilla-todo:todos";
 
 /* ===========================
    localStorage 연동
-   - todos 배열을 JSON 문자열로 저장/복원한다.
    =========================== */
-
-// 저장된 todos 를 읽어온다. 없거나 깨졌으면 빈 배열을 반환한다.
 function loadTodos() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
-    // 혹시 배열이 아닌 값이 저장돼 있으면 무시한다.
     if (!Array.isArray(parsed)) return [];
     return parsed;
   } catch (error) {
-    // 깨진 JSON 등 예외 상황: 콘솔에만 남기고 빈 배열로 시작한다.
     console.warn("localStorage 에서 todos 를 불러오지 못했습니다.", error);
     return [];
   }
 }
 
-// 현재 todos 를 JSON 문자열로 저장한다.
 function saveTodos() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
   } catch (error) {
-    // 용량 초과 등으로 실패해도 메모리상 상태는 유지된다.
     console.warn("localStorage 에 todos 를 저장하지 못했습니다.", error);
   }
 }
@@ -62,10 +56,9 @@ function saveTodos() {
 /* ===========================
    상태
    =========================== */
-// Todo 객체 형태: { id, text, completed, date }
-let todos = loadTodos(); // 페이지 로드 시 한 번 복원
+let todos = loadTodos();
 let currentFilter = FILTERS.ALL;
-let selectedDate = formatDate(new Date()); // 초기값: 오늘
+let selectedDate = formatDate(new Date());
 
 /* ===========================
    DOM 참조
@@ -79,6 +72,9 @@ const $filterButtons = document.querySelectorAll(".filter-bar__button");
 const $selectedDateLabel = document.getElementById("selected-date-label");
 const $prevDayButton = document.getElementById("prev-day-button");
 const $nextDayButton = document.getElementById("next-day-button");
+const $weekList = document.getElementById("week-list");
+const $prevWeekButton = document.getElementById("prev-week-button");
+const $nextWeekButton = document.getElementById("next-week-button");
 
 /* ===========================
    순수 함수: 날짜 유틸
@@ -115,11 +111,33 @@ function formatDateLabel(dateString) {
   return `${year}년 ${month}월 ${day}일 (${weekday})`;
 }
 
+// 주어진 날짜가 속한 주의 "월요일" 날짜 문자열을 반환한다.
+//   JS getDay(): 일=0, 월=1, ..., 토=6
+//   월요일까지의 차이:
+//     월(1) → 0,  화(2) → -1,  수(3) → -2,  ...  토(6) → -5
+//     일(0) → -6  (지난 월요일까지 6일 전)
+function getWeekStart(dateString) {
+  const date = parseDate(dateString);
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diffToMonday);
+  return formatDate(date);
+}
+
+// 주어진 날짜가 속한 주의 7일 날짜 배열을 반환한다 (월~일 순).
+function getWeekDates(dateString) {
+  const start = getWeekStart(dateString);
+  return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
+}
+
+// 특정 날짜의 Todo 개수
+function countTodosByDate(dateString) {
+  return todos.filter((todo) => todo.date === dateString).length;
+}
+
 /* ===========================
    순수 함수: 필터링
    =========================== */
-
-// selectedDate 와 currentFilter 를 모두 적용해 보여줄 todos 를 반환
 function getVisibleTodos() {
   return todos
     .filter((todo) => todo.date === selectedDate)
@@ -132,9 +150,7 @@ function getVisibleTodos() {
 
 /* ===========================
    액션
-   - 상태(todos) 변경 → saveTodos() → render() 순서를 지킨다.
    =========================== */
-
 function addTodo(text) {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -146,7 +162,7 @@ function addTodo(text) {
     id: Date.now(),
     text: trimmed,
     completed: false,
-    date: selectedDate, // 어느 날의 할 일인지 함께 보관
+    date: selectedDate,
   });
 
   $message.textContent = "";
@@ -186,7 +202,6 @@ function deleteTodo(id) {
 }
 
 function setFilter(nextFilter) {
-  // 필터는 화면 상태일 뿐 데이터를 바꾸지 않으므로 저장하지 않는다.
   const allowed = Object.values(FILTERS);
   if (!allowed.includes(nextFilter)) return;
   currentFilter = nextFilter;
@@ -194,8 +209,13 @@ function setFilter(nextFilter) {
 }
 
 function shiftSelectedDay(deltaDays) {
-  // 선택된 날짜도 화면 상태일 뿐 데이터를 바꾸지 않으므로 저장하지 않는다.
   selectedDate = shiftDate(selectedDate, deltaDays);
+  render();
+}
+
+// 주간 뷰의 셀을 클릭했을 때 호출
+function setSelectedDate(dateString) {
+  selectedDate = dateString;
   render();
 }
 
@@ -204,12 +224,53 @@ function shiftSelectedDay(deltaDays) {
    =========================== */
 function render() {
   renderDateBar();
+  renderWeekView();
   renderFilterButtons();
   renderTodoList();
 }
 
 function renderDateBar() {
   $selectedDateLabel.textContent = formatDateLabel(selectedDate);
+}
+
+// 주간 뷰: selectedDate 가 속한 주의 7일을 그린다.
+function renderWeekView() {
+  const today = formatDate(new Date());
+  const weekDates = getWeekDates(selectedDate);
+
+  $weekList.innerHTML = "";
+  weekDates.forEach((dateString, index) => {
+    $weekList.appendChild(createWeekDayElement(dateString, index, today));
+  });
+}
+
+// 주간 뷰의 한 셀(<li>)을 만든다.
+function createWeekDayElement(dateString, weekdayIndex, todayString) {
+  const $item = document.createElement("li");
+  $item.className = "week-view__day";
+  $item.dataset.date = dateString; // 클릭 위임에서 사용
+  $item.setAttribute("role", "button");
+  $item.setAttribute("tabindex", "0");
+  $item.setAttribute("aria-label", formatDateLabel(dateString));
+
+  if (dateString === todayString) $item.classList.add("is-today");
+  if (dateString === selectedDate) $item.classList.add("is-selected");
+
+  const $weekday = document.createElement("span");
+  $weekday.className = "week-view__day-weekday";
+  $weekday.textContent = WEEK_VIEW_WEEKDAYS[weekdayIndex];
+
+  const $dayNumber = document.createElement("span");
+  $dayNumber.className = "week-view__day-number";
+  $dayNumber.textContent = String(parseDate(dateString).getDate());
+
+  const $count = document.createElement("span");
+  $count.className = "week-view__day-count";
+  const count = countTodosByDate(dateString);
+  $count.textContent = count > 0 ? `${count}개` : "";
+
+  $item.append($weekday, $dayNumber, $count);
+  return $item;
 }
 
 function renderFilterButtons() {
@@ -273,7 +334,6 @@ function createTodoElement(todo) {
 /* ===========================
    이벤트 바인딩
    =========================== */
-
 $form.addEventListener("submit", (event) => {
   event.preventDefault();
   addTodo($input.value);
@@ -304,9 +364,29 @@ $filterButtons.forEach(($button) => {
   });
 });
 
-// 날짜 이동
+// 날짜 이동 (일간)
 $prevDayButton.addEventListener("click", () => shiftSelectedDay(-1));
 $nextDayButton.addEventListener("click", () => shiftSelectedDay(1));
+
+// 주차 이동: selectedDate 를 7일 단위로 이동시키면 주간 뷰가 자동으로 옮겨진다.
+$prevWeekButton.addEventListener("click", () => shiftSelectedDay(-7));
+$nextWeekButton.addEventListener("click", () => shiftSelectedDay(7));
+
+// 주간 뷰 셀 클릭: 이벤트 위임으로 어떤 날짜인지 식별
+$weekList.addEventListener("click", (event) => {
+  const $day = event.target.closest(".week-view__day");
+  if (!$day) return;
+  setSelectedDate($day.dataset.date);
+});
+
+// 접근성: Enter / Space 로도 날짜 선택 가능
+$weekList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const $day = event.target.closest(".week-view__day");
+  if (!$day) return;
+  event.preventDefault();
+  setSelectedDate($day.dataset.date);
+});
 
 /* ===========================
    초기 렌더

@@ -69,13 +69,12 @@ ul {
 
 /* ===========================
    날짜 바 (일간 뷰)
-   - 좌/우 이동 버튼 + 가운데 날짜 라벨
    =========================== */
 .date-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--color-primary-soft);
   border-radius: var(--radius-sm);
@@ -103,6 +102,93 @@ ul {
 
 .date-bar__nav:hover {
   background: var(--color-surface);
+}
+
+/* ===========================
+   주간 뷰
+   - 왼쪽 이전 주차 / 7일 그리드 / 오른쪽 다음 주차
+   =========================== */
+.week-view {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.week-view__nav {
+  width: 24px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.week-view__nav:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.week-view__list {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+}
+
+.week-view__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.week-view__day:hover {
+  border-color: var(--color-primary);
+}
+
+.week-view__day-weekday {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.week-view__day-number {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.week-view__day-count {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  min-height: 12px; /* 0개일 때도 자리만 차지 */
+}
+
+/* 오늘 날짜: 보라 테두리로 강조 */
+.week-view__day.is-today {
+  border-color: var(--color-primary);
+}
+
+/* 선택된 날짜: 보라 배경으로 채움 (오늘이면서 선택이면 둘 다 보이게 둠) */
+.week-view__day.is-selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.week-view__day.is-selected .week-view__day-weekday,
+.week-view__day.is-selected .week-view__day-count {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* ===========================
@@ -135,7 +221,6 @@ ul {
   font-weight: 600;
 }
 
-/* 안내 메시지: 비어 있어도 자리(min-height)를 차지해 레이아웃이 튀지 않게 */
 .todo-input__message {
   margin: var(--space-2) 0 var(--space-4);
   font-size: 12px;
