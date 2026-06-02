@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vanilla Todo</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1 class="app__title">Todo</h1>
+
+      <!-- 입력 영역: 폼으로 감싸 Enter 키와 추가 버튼 둘 다 지원 -->
+      <form id="todo-form" class="todo-input">
+        <input
+          type="text"
+          id="todo-input-field"
+          class="todo-input__field"
+          placeholder="할 일을 입력하세요"
+          autocomplete="off"
+        />
+        <button type="submit" class="todo-input__button">추가</button>
+      </form>
+
+      <!-- 빈 입력 등 상황에 따른 안내 메시지 -->
+      <p id="input-message" class="todo-input__message" aria-live="polite"></p>
+
+      <!-- Todo 목록 -->
+      <ul id="todo-list" class="todo-list"></ul>
+
+      <!-- 데이터가 없을 때 보여줄 빈 상태 메시지 -->
+      <p id="empty-message" class="todo-list__empty">등록된 할 일이 없습니다.</p>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

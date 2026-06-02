@@ -1,0 +1,165 @@
+/* ===========================
+   디자인 토큰 (CSS 변수)
+   - 색·간격·둥근모서리 값을 한곳에서 관리해
+     컬러나 여백을 일관되게 유지한다.
+   =========================== */
+:root {
+  --color-primary: #672be0;
+  --color-primary-soft: #f1ebfd;
+  --color-text: #1f1f1f;
+  --color-text-muted: #8a8a8a;
+  --color-border: #e6e6e6;
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-danger: #d64545;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+}
+
+/* ===========================
+   리셋 / 기본
+   =========================== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+    Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ===========================
+   앱 컨테이너
+   - 화면 중앙에 카드 형태로 배치
+   =========================== */
+.app {
+  max-width: 520px;
+  margin: 48px auto;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.app__title {
+  margin: 0 0 var(--space-6);
+  font-size: 24px;
+  color: var(--color-primary);
+}
+
+/* ===========================
+   입력 영역
+   =========================== */
+.todo-input {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.todo-input__field {
+  flex: 1;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.todo-input__field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.todo-input__button {
+  padding: 0 var(--space-4);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+/* 안내 메시지: 비었어도 자리(min-height)를 차지해 레이아웃이 튀지 않게 */
+.todo-input__message {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: 12px;
+  color: var(--color-danger);
+  min-height: 16px;
+}
+
+/* ===========================
+   Todo 목록
+   =========================== */
+.todo-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.todo-list__text {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* 완료된 Todo: 텍스트 취소선 + 색을 흐리게 */
+.todo-list__item.is-completed .todo-list__text {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+/* 항목별 액션 버튼 (수정 / 완료 / 삭제) */
+.todo-list__action {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.todo-list__action.is-primary {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.todo-list__action.is-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* ===========================
+   빈 상태
+   =========================== */
+.todo-list__empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-6) 0;
+  margin: 0;
+}
+
+.todo-list__empty[hidden] {
+  display: none;
+}

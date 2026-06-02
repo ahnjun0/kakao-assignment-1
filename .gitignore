@@ -1,0 +1,11 @@
+.env
+.DS_Store
+node_modules/
+.vscode/
+.idea/
+*.log
+
+# 작업 지시서 / Claude 컨텍스트 등 제출용이 아닌 마크다운
+*.md
+!README.md
+!**/README.md
