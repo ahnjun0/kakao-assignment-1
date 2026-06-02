@@ -22,6 +22,7 @@ const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const WEEK_VIEW_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const STORAGE_KEY = "vanilla-todo:todos";
+const THEME_STORAGE_KEY = "vanilla-todo:theme";
 
 const CALENDAR_GRID_SIZE = 42; // 6주 × 7일
 
@@ -57,6 +58,10 @@ let selectedDate = formatDate(new Date());
 let isCalendarOpen = false;
 let calendarAnchor = getMonthStart(selectedDate); // 현재 보고 있는 달의 "1일"
 
+// 테마: index.html 의 인라인 스크립트가 이미 data-theme 을 세팅했으므로
+//       그 값을 그대로 읽어 한 곳에서 관리한다.
+let theme = document.documentElement.getAttribute("data-theme") || "light";
+
 /* ===== DOM 참조 ===== */
 const $form = document.getElementById("todo-form");
 const $input = document.getElementById("todo-input-field");
@@ -78,6 +83,7 @@ const $nextMonthButton = document.getElementById("next-month-button");
 const $weekList = document.getElementById("week-list");
 const $prevWeekButton = document.getElementById("prev-week-button");
 const $nextWeekButton = document.getElementById("next-week-button");
+const $themeToggleButton = document.getElementById("theme-toggle-button");
 
 /* ===== 순수 함수: 날짜 유틸 ===== */
 
@@ -265,6 +271,17 @@ function setSelectedDate(dateString) {
 
 function goToToday() {
   setSelectedDate(formatDate(new Date()));
+}
+
+/* 테마 토글: html 의 data-theme 속성을 바꾸면 모든 CSS 변수가 다시 매칭된다. */
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", theme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (error) {
+    console.warn("테마를 저장하지 못했습니다.", error);
+  }
 }
 
 /* 달력 액션 */
@@ -495,6 +512,9 @@ $goTodayButton.addEventListener("click", goToToday);
 // 주차 이동
 $prevWeekButton.addEventListener("click", () => shiftSelectedDay(-7));
 $nextWeekButton.addEventListener("click", () => shiftSelectedDay(7));
+
+// 테마 토글
+$themeToggleButton.addEventListener("click", toggleTheme);
 
 // 주간 뷰 셀
 $weekList.addEventListener("click", (event) => {

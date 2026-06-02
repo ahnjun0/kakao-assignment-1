@@ -1,5 +1,7 @@
 /* ===========================
-   디자인 토큰 (CSS 변수)
+   디자인 토큰 (라이트 기본값)
+   - 모든 컴포넌트는 이 변수만 참조한다.
+   - 다크 모드는 아래 [data-theme="dark"] 에서 변수만 덮어쓴다.
    =========================== */
 :root {
   --color-primary: #672be0;
@@ -11,6 +13,9 @@
   --color-surface: #ffffff;
   --color-danger: #d64545;
 
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.08);
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-pill: 999px;
@@ -20,6 +25,24 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
+}
+
+/* ===========================
+   다크 토큰
+   - 컴포넌트 CSS 는 그대로 두고 변수만 갈아끼운다.
+   - --color-primary 는 두 모드 공통 (브랜드 컬러 유지).
+   =========================== */
+:root[data-theme="dark"] {
+  --color-primary-soft: #2a1f4a;
+  --color-text: #e8e8ec;
+  --color-text-muted: #8a8a93;
+  --color-border: #2a2a33;
+  --color-bg: #14141a;
+  --color-surface: #1e1e26;
+  --color-danger: #ef6262;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* ===========================
@@ -42,6 +65,7 @@ body {
 button {
   cursor: pointer;
   font-family: inherit;
+  color: inherit;
 }
 
 ul {
@@ -59,18 +83,61 @@ ul {
   padding: var(--space-6);
   background: var(--color-surface);
   border-radius: var(--radius-md);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
+}
+
+/* 헤더: 제목 + 테마 토글 */
+.app__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
 }
 
 .app__title {
-  margin: 0 0 var(--space-4);
+  margin: 0;
   font-size: 24px;
   color: var(--color-primary);
 }
 
 /* ===========================
-   날짜 바 (일간 뷰)
-   - position: relative 로 달력 팝오버의 기준점을 잡는다.
+   테마 토글 버튼
+   - 두 SVG 아이콘이 들어있고, data-theme 에 따라 하나만 보임
+   =========================== */
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 0;
+}
+
+.theme-toggle:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.theme-toggle__icon {
+  display: none;
+}
+
+/* 라이트 모드일 때는 달 아이콘 (클릭하면 다크로 갈 거라는 의미) */
+:root[data-theme="light"] .theme-toggle__icon--moon {
+  display: inline-block;
+}
+
+/* 다크 모드일 때는 해 아이콘 */
+:root[data-theme="dark"] .theme-toggle__icon--sun {
+  display: inline-block;
+}
+
+/* ===========================
+   날짜 바
    =========================== */
 .date-bar {
   position: relative;
@@ -89,7 +156,6 @@ ul {
   gap: var(--space-2);
 }
 
-/* 날짜 라벨 자체가 버튼이 되어 달력 팝오버를 토글한다. */
 .date-bar__toggle {
   display: inline-flex;
   align-items: center;
@@ -111,7 +177,6 @@ ul {
   transition: transform 0.15s;
 }
 
-/* 팝오버가 열려있을 때 caret 뒤집기 */
 .date-bar.is-calendar-open .date-bar__caret {
   transform: rotate(180deg);
 }
@@ -134,7 +199,6 @@ ul {
   background: var(--color-surface);
 }
 
-/* "오늘로" 알약 버튼 */
 .date-bar__today {
   border: 1px solid var(--color-primary);
   background: var(--color-surface);
@@ -156,7 +220,6 @@ ul {
 
 /* ===========================
    달력 팝오버
-   - date-bar 를 기준으로 그 아래에 절대 위치
    =========================== */
 .calendar {
   position: absolute;
@@ -168,7 +231,7 @@ ul {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-popover);
   padding: var(--space-3);
 }
 
@@ -236,24 +299,20 @@ ul {
   background: var(--color-primary-soft);
 }
 
-/* 다른 달 날짜: 흐리게 */
 .calendar__day.is-other-month {
   color: var(--color-text-muted);
   opacity: 0.45;
 }
 
-/* 오늘: 보라 테두리 */
 .calendar__day.is-today {
   border-color: var(--color-primary);
 }
 
-/* 선택된 날짜: 보라 배경 채움 */
 .calendar__day.is-selected {
   background: var(--color-primary);
   color: #fff;
 }
 
-/* Todo 있는 날: 셀 하단 작은 점 */
 .calendar__day.has-todos::after {
   content: "";
   position: absolute;
@@ -369,9 +428,15 @@ ul {
 .todo-input__field {
   flex: 1;
   padding: var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: 14px;
+}
+
+.todo-input__field::placeholder {
+  color: var(--color-text-muted);
 }
 
 .todo-input__field:focus {
