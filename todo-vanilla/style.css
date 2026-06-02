@@ -1,7 +1,5 @@
 /* ===========================
    디자인 토큰 (CSS 변수)
-   - 색·간격·둥근모서리 값을 한곳에서 관리해
-     컬러나 여백을 일관되게 유지한다.
    =========================== */
 :root {
   --color-primary: #672be0;
@@ -53,7 +51,6 @@ ul {
 
 /* ===========================
    앱 컨테이너
-   - 화면 중앙에 카드 형태로 배치
    =========================== */
 .app {
   max-width: 520px;
@@ -65,9 +62,47 @@ ul {
 }
 
 .app__title {
-  margin: 0 0 var(--space-6);
+  margin: 0 0 var(--space-4);
   font-size: 24px;
   color: var(--color-primary);
+}
+
+/* ===========================
+   날짜 바 (일간 뷰)
+   - 좌/우 이동 버튼 + 가운데 날짜 라벨
+   =========================== */
+.date-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+}
+
+.date-bar__label {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: 15px;
+}
+
+.date-bar__nav {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.date-bar__nav:hover {
+  background: var(--color-surface);
 }
 
 /* ===========================
@@ -100,7 +135,7 @@ ul {
   font-weight: 600;
 }
 
-/* 안내 메시지: 비었어도 자리(min-height)를 차지해 레이아웃이 튀지 않게 */
+/* 안내 메시지: 비어 있어도 자리(min-height)를 차지해 레이아웃이 튀지 않게 */
 .todo-input__message {
   margin: var(--space-2) 0 var(--space-4);
   font-size: 12px;
@@ -110,7 +145,6 @@ ul {
 
 /* ===========================
    필터 바
-   - 3개 탭이 가로로 균등 분배
    =========================== */
 .filter-bar {
   display: flex;
@@ -134,7 +168,6 @@ ul {
   color: var(--color-primary);
 }
 
-/* 현재 선택된 필터: 메인 컬러 톤으로 강조 */
 .filter-bar__button.is-active {
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -158,13 +191,11 @@ ul {
   word-break: break-word;
 }
 
-/* 완료된 Todo: 텍스트 취소선 + 색을 흐리게 */
 .todo-list__item.is-completed .todo-list__text {
   text-decoration: line-through;
   color: var(--color-text-muted);
 }
 
-/* 항목별 액션 버튼 (수정 / 완료 / 삭제) */
 .todo-list__action {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
