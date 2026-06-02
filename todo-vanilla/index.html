@@ -10,7 +10,7 @@
     <main class="app">
       <h1 class="app__title">Todo</h1>
 
-      <!-- 일간 뷰: 이전/다음 버튼 + 현재 선택된 날짜 -->
+      <!-- 일간 뷰: 이전/다음 + 날짜 라벨 버튼(클릭 시 달력 팝오버) + (오늘이 아니면) 오늘로 -->
       <section class="date-bar" aria-label="날짜 선택">
         <button
           type="button"
@@ -20,7 +20,26 @@
         >
           ‹
         </button>
-        <div id="selected-date-label" class="date-bar__label">YYYY-MM-DD</div>
+        <div class="date-bar__center">
+          <button
+            type="button"
+            id="date-toggle-button"
+            class="date-bar__toggle"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+          >
+            <span id="selected-date-label" class="date-bar__label">YYYY-MM-DD</span>
+            <span class="date-bar__caret" aria-hidden="true">▾</span>
+          </button>
+          <button
+            type="button"
+            id="go-today-button"
+            class="date-bar__today"
+            hidden
+          >
+            오늘로
+          </button>
+        </div>
         <button
           type="button"
           id="next-day-button"
@@ -29,29 +48,54 @@
         >
           ›
         </button>
+
+        <!-- 달력 팝오버 -->
+        <div
+          id="calendar-popover"
+          class="calendar"
+          role="dialog"
+          aria-label="달력"
+          hidden
+        >
+          <header class="calendar__header">
+            <button
+              type="button"
+              id="prev-month-button"
+              class="calendar__nav"
+              aria-label="이전 달"
+            >
+              ‹
+            </button>
+            <span id="calendar-month-label" class="calendar__month-label">
+              YYYY년 M월
+            </span>
+            <button
+              type="button"
+              id="next-month-button"
+              class="calendar__nav"
+              aria-label="다음 달"
+            >
+              ›
+            </button>
+          </header>
+          <ul class="calendar__weekdays" aria-hidden="true">
+            <li>월</li>
+            <li>화</li>
+            <li>수</li>
+            <li>목</li>
+            <li>금</li>
+            <li>토</li>
+            <li>일</li>
+          </ul>
+          <ul id="calendar-days" class="calendar__days"></ul>
+        </div>
       </section>
 
-      <!-- 주간 뷰: 월~일 7일 + 주차 이동 -->
+      <!-- 주간 뷰 -->
       <section class="week-view" aria-label="주간 뷰">
-        <button
-          type="button"
-          id="prev-week-button"
-          class="week-view__nav"
-          aria-label="이전 주"
-        >
-          «
-        </button>
-        <ul id="week-list" class="week-view__list">
-          <!-- JS 에서 7개 셀을 동적으로 렌더링 -->
-        </ul>
-        <button
-          type="button"
-          id="next-week-button"
-          class="week-view__nav"
-          aria-label="다음 주"
-        >
-          »
-        </button>
+        <button type="button" id="prev-week-button" class="week-view__nav" aria-label="이전 주">«</button>
+        <ul id="week-list" class="week-view__list"></ul>
+        <button type="button" id="next-week-button" class="week-view__nav" aria-label="다음 주">»</button>
       </section>
 
       <!-- 입력 영역 -->
@@ -66,28 +110,13 @@
         <button type="submit" class="todo-input__button">추가</button>
       </form>
 
-      <!-- 빈 입력 등 상황에 따른 안내 메시지 -->
       <p id="input-message" class="todo-input__message" aria-live="polite"></p>
 
       <!-- 상태 필터 탭 -->
       <nav class="filter-bar" aria-label="상태 필터">
-        <button
-          type="button"
-          class="filter-bar__button is-active"
-          data-filter="all"
-        >
-          전체
-        </button>
-        <button type="button" class="filter-bar__button" data-filter="active">
-          진행 중
-        </button>
-        <button
-          type="button"
-          class="filter-bar__button"
-          data-filter="completed"
-        >
-          완료
-        </button>
+        <button type="button" class="filter-bar__button is-active" data-filter="all">전체</button>
+        <button type="button" class="filter-bar__button" data-filter="active">진행 중</button>
+        <button type="button" class="filter-bar__button" data-filter="completed">완료</button>
       </nav>
 
       <ul id="todo-list" class="todo-list"></ul>

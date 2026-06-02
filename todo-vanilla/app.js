@@ -1,36 +1,31 @@
 /**
- * Vanilla Todo - CRUD + 필터 + 일간 뷰 + 주간 뷰 + localStorage
+ * Vanilla Todo - CRUD + 필터 + 일간/주간/달력 뷰 + localStorage
  *
- * 주간 뷰 설계
- *   - 별도의 weekStart 상태를 두지 않고, selectedDate 하나만 진실의 출처로 유지한다.
- *   - 화면에 그릴 주는 "selectedDate 가 속한 주의 월요일~일요일"로 매번 계산한다.
- *   - 이전 주차 / 다음 주차 버튼은 selectedDate 를 ±7일 이동시킨다.
- *     → 주가 자동으로 옮겨지고, 일간 뷰의 날짜 라벨도 함께 갱신된다.
- *   - 셀 클릭 시 selectedDate 를 해당 날짜로 바꾼다.
- *
- *   장점: 상태 동기화 이슈가 없다.
- *   한계: "이번 주 보기"가 항상 selectedDate 를 따라간다. 의도와 일치한다.
+ * 달력 팝오버 설계
+ *   - 두 가지 상태를 추가한다: isCalendarOpen, calendarAnchor (YYYY-MM-01).
+ *   - "열 때마다" calendarAnchor 를 selectedDate 의 달로 동기화한다.
+ *     → 어디서 닫혔든 다시 열면 현재 선택 날짜 기준으로 보임.
+ *   - 그리드는 항상 6주 × 7일 = 42칸 고정.
+ *     → 달이 바뀌어도 레이아웃이 흔들리지 않음. 다른 달 날짜는 흐리게.
+ *   - 닫는 방법:
+ *     1) 날짜 선택   2) 바깥 클릭   3) Esc 키
  */
 
-/* ===========================
-   상수
-   =========================== */
+/* ===== 상수 ===== */
 const FILTERS = {
   ALL: "all",
   ACTIVE: "active",
   COMPLETED: "completed",
 };
 
-// Date.getDay() 결과(0~6, 일=0) 매핑
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
-// 주간 뷰는 월요일부터 시작하므로 표기 순서를 따로 만든다.
 const WEEK_VIEW_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const STORAGE_KEY = "vanilla-todo:todos";
 
-/* ===========================
-   localStorage 연동
-   =========================== */
+const CALENDAR_GRID_SIZE = 42; // 6주 × 7일
+
+/* ===== localStorage 연동 ===== */
 function loadTodos() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -53,34 +48,39 @@ function saveTodos() {
   }
 }
 
-/* ===========================
-   상태
-   =========================== */
+/* ===== 상태 ===== */
 let todos = loadTodos();
 let currentFilter = FILTERS.ALL;
 let selectedDate = formatDate(new Date());
 
-/* ===========================
-   DOM 참조
-   =========================== */
+// 달력 상태
+let isCalendarOpen = false;
+let calendarAnchor = getMonthStart(selectedDate); // 현재 보고 있는 달의 "1일"
+
+/* ===== DOM 참조 ===== */
 const $form = document.getElementById("todo-form");
 const $input = document.getElementById("todo-input-field");
 const $message = document.getElementById("input-message");
 const $list = document.getElementById("todo-list");
 const $emptyMessage = document.getElementById("empty-message");
 const $filterButtons = document.querySelectorAll(".filter-bar__button");
+const $dateBar = document.querySelector(".date-bar");
+const $dateToggleButton = document.getElementById("date-toggle-button");
 const $selectedDateLabel = document.getElementById("selected-date-label");
 const $prevDayButton = document.getElementById("prev-day-button");
 const $nextDayButton = document.getElementById("next-day-button");
+const $goTodayButton = document.getElementById("go-today-button");
+const $calendarPopover = document.getElementById("calendar-popover");
+const $calendarMonthLabel = document.getElementById("calendar-month-label");
+const $calendarDays = document.getElementById("calendar-days");
+const $prevMonthButton = document.getElementById("prev-month-button");
+const $nextMonthButton = document.getElementById("next-month-button");
 const $weekList = document.getElementById("week-list");
 const $prevWeekButton = document.getElementById("prev-week-button");
 const $nextWeekButton = document.getElementById("next-week-button");
 
-/* ===========================
-   순수 함수: 날짜 유틸
-   =========================== */
+/* ===== 순수 함수: 날짜 유틸 ===== */
 
-// Date → "YYYY-MM-DD" (로컬 시간 기준)
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -88,20 +88,17 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-// "YYYY-MM-DD" → Date (로컬 자정)
 function parseDate(dateString) {
   const [year, month, day] = dateString.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-// 날짜 문자열에 일수를 더하거나 빼서 새 문자열을 반환
 function shiftDate(dateString, deltaDays) {
   const next = parseDate(dateString);
   next.setDate(next.getDate() + deltaDays);
   return formatDate(next);
 }
 
-// 사람이 보기 좋은 라벨로 변환. 예: "2026년 6월 2일 (화)"
 function formatDateLabel(dateString) {
   const date = parseDate(dateString);
   const year = date.getFullYear();
@@ -111,11 +108,7 @@ function formatDateLabel(dateString) {
   return `${year}년 ${month}월 ${day}일 (${weekday})`;
 }
 
-// 주어진 날짜가 속한 주의 "월요일" 날짜 문자열을 반환한다.
-//   JS getDay(): 일=0, 월=1, ..., 토=6
-//   월요일까지의 차이:
-//     월(1) → 0,  화(2) → -1,  수(3) → -2,  ...  토(6) → -5
-//     일(0) → -6  (지난 월요일까지 6일 전)
+/* 주간 뷰용 */
 function getWeekStart(dateString) {
   const date = parseDate(dateString);
   const day = date.getDay();
@@ -124,15 +117,61 @@ function getWeekStart(dateString) {
   return formatDate(date);
 }
 
-// 주어진 날짜가 속한 주의 7일 날짜 배열을 반환한다 (월~일 순).
 function getWeekDates(dateString) {
   const start = getWeekStart(dateString);
   return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
 }
 
-// 특정 날짜의 Todo 개수를 "완료 / 전체"로 함께 반환한다.
-// 두 값을 따로 계산하면 같은 배열을 두 번 도는 셈이라
-// 한 번 돌면서 두 값을 동시에 누적한다.
+/* 달력용 */
+
+// 주어진 날짜가 속한 달의 1일 문자열을 반환한다.
+function getMonthStart(dateString) {
+  const date = parseDate(dateString);
+  date.setDate(1);
+  return formatDate(date);
+}
+
+// 달 단위로 이동한다.
+//   주의: setMonth() 는 날짜가 다음 달에 없으면 다음다음 달로 넘어간다.
+//        (예: 1월 31일 + 1개월 → 3월 3일)
+//        그래서 setDate(1) 을 먼저 호출해 항상 1일 기준으로 이동한다.
+function shiftMonth(dateString, deltaMonths) {
+  const date = parseDate(dateString);
+  date.setDate(1);
+  date.setMonth(date.getMonth() + deltaMonths);
+  return formatDate(date);
+}
+
+// "YYYY년 M월" 라벨
+function formatMonthLabel(monthStartString) {
+  const date = parseDate(monthStartString);
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+}
+
+// 달력 그리드(6주 × 7일)에 들어갈 42개 날짜를 만든다.
+// 각 항목은 { date, isCurrentMonth } 형태.
+function getCalendarGrid(monthStartString) {
+  const monthStart = parseDate(monthStartString);
+  const targetMonth = monthStart.getMonth();
+
+  // 그리드는 그 달 1일이 속한 "주의 월요일" 부터 시작
+  const firstWeekday = monthStart.getDay(); // 0=일
+  const diffToMonday = firstWeekday === 0 ? -6 : 1 - firstWeekday;
+
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(1 + diffToMonday);
+
+  return Array.from({ length: CALENDAR_GRID_SIZE }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return {
+      date: formatDate(date),
+      isCurrentMonth: date.getMonth() === targetMonth,
+    };
+  });
+}
+
+// 특정 날짜의 "완료 / 전체" 카운트
 function countTodosByDate(dateString) {
   let total = 0;
   let completed = 0;
@@ -144,9 +183,7 @@ function countTodosByDate(dateString) {
   return { total, completed };
 }
 
-/* ===========================
-   순수 함수: 필터링
-   =========================== */
+/* ===== 순수 함수: 표시할 todos ===== */
 function getVisibleTodos() {
   return todos
     .filter((todo) => todo.date === selectedDate)
@@ -154,12 +191,11 @@ function getVisibleTodos() {
       if (currentFilter === FILTERS.ACTIVE) return !todo.completed;
       if (currentFilter === FILTERS.COMPLETED) return todo.completed;
       return true;
-    });
+    })
+    .sort((a, b) => Number(a.completed) - Number(b.completed));
 }
 
-/* ===========================
-   액션
-   =========================== */
+/* ===== 액션 ===== */
 function addTodo(text) {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -222,27 +258,99 @@ function shiftSelectedDay(deltaDays) {
   render();
 }
 
-// 주간 뷰의 셀을 클릭했을 때 호출
 function setSelectedDate(dateString) {
   selectedDate = dateString;
   render();
 }
 
-/* ===========================
-   렌더
-   =========================== */
+function goToToday() {
+  setSelectedDate(formatDate(new Date()));
+}
+
+/* 달력 액션 */
+
+// 달력을 열 때마다 현재 selectedDate 의 달로 동기화한다.
+function openCalendar() {
+  isCalendarOpen = true;
+  calendarAnchor = getMonthStart(selectedDate);
+  render();
+}
+
+function closeCalendar() {
+  if (!isCalendarOpen) return;
+  isCalendarOpen = false;
+  render();
+}
+
+function toggleCalendar() {
+  if (isCalendarOpen) closeCalendar();
+  else openCalendar();
+}
+
+function shiftCalendarMonth(deltaMonths) {
+  calendarAnchor = shiftMonth(calendarAnchor, deltaMonths);
+  render();
+}
+
+// 달력에서 날짜 선택: 선택일 갱신 + 팝오버 닫기
+function selectDateFromCalendar(dateString) {
+  selectedDate = dateString;
+  isCalendarOpen = false;
+  render();
+}
+
+/* ===== 렌더 ===== */
 function render() {
   renderDateBar();
+  renderCalendar();
   renderWeekView();
   renderFilterButtons();
   renderTodoList();
 }
 
 function renderDateBar() {
+  const today = formatDate(new Date());
   $selectedDateLabel.textContent = formatDateLabel(selectedDate);
+  $goTodayButton.hidden = selectedDate === today;
+
+  $dateToggleButton.setAttribute("aria-expanded", String(isCalendarOpen));
+  $dateBar.classList.toggle("is-calendar-open", isCalendarOpen);
 }
 
-// 주간 뷰: selectedDate 가 속한 주의 7일을 그린다.
+// 달력: 닫혀 있으면 자식 렌더는 건너뛰고 hidden 만 토글
+function renderCalendar() {
+  $calendarPopover.hidden = !isCalendarOpen;
+  if (!isCalendarOpen) return;
+
+  const today = formatDate(new Date());
+  $calendarMonthLabel.textContent = formatMonthLabel(calendarAnchor);
+
+  const grid = getCalendarGrid(calendarAnchor);
+  $calendarDays.innerHTML = "";
+  grid.forEach((cell) => {
+    $calendarDays.appendChild(createCalendarDayElement(cell, today));
+  });
+}
+
+function createCalendarDayElement({ date, isCurrentMonth }, todayString) {
+  const $item = document.createElement("li");
+  $item.className = "calendar__day";
+  $item.dataset.date = date;
+  $item.setAttribute("role", "button");
+  $item.setAttribute("tabindex", "0");
+  $item.setAttribute("aria-label", formatDateLabel(date));
+
+  if (!isCurrentMonth) $item.classList.add("is-other-month");
+  if (date === todayString) $item.classList.add("is-today");
+  if (date === selectedDate) $item.classList.add("is-selected");
+
+  const { total } = countTodosByDate(date);
+  if (total > 0) $item.classList.add("has-todos");
+
+  $item.textContent = String(parseDate(date).getDate());
+  return $item;
+}
+
 function renderWeekView() {
   const today = formatDate(new Date());
   const weekDates = getWeekDates(selectedDate);
@@ -253,11 +361,10 @@ function renderWeekView() {
   });
 }
 
-// 주간 뷰의 한 셀(<li>)을 만든다.
 function createWeekDayElement(dateString, weekdayIndex, todayString) {
   const $item = document.createElement("li");
   $item.className = "week-view__day";
-  $item.dataset.date = dateString; // 클릭 위임에서 사용
+  $item.dataset.date = dateString;
   $item.setAttribute("role", "button");
   $item.setAttribute("tabindex", "0");
   $item.setAttribute("aria-label", formatDateLabel(dateString));
@@ -277,12 +384,9 @@ function createWeekDayElement(dateString, weekdayIndex, todayString) {
   $count.className = "week-view__day-count";
   const { total, completed } = countTodosByDate(dateString);
   if (total === 0) {
-    // 그 날 등록된 Todo 가 없으면 자리만 비워둔다.
     $count.textContent = "";
   } else {
-    // "완료 / 전체" 비율로 한 줄에 진행도를 보여준다.
     $count.textContent = `${completed}/${total}`;
-    // 모두 완료된 날은 흐리게 처리해 "끝난 날"임을 한눈에 보이게.
     if (completed === total) $count.classList.add("is-all-done");
   }
 
@@ -322,6 +426,16 @@ function createTodoElement(todo) {
   if (todo.completed) $item.classList.add("is-completed");
   $item.dataset.id = String(todo.id);
 
+  const $checkbox = document.createElement("input");
+  $checkbox.type = "checkbox";
+  $checkbox.className = "todo-list__checkbox";
+  $checkbox.checked = todo.completed;
+  $checkbox.dataset.action = "toggle";
+  $checkbox.setAttribute(
+    "aria-label",
+    todo.completed ? "완료 취소" : "완료 처리"
+  );
+
   const $text = document.createElement("span");
   $text.className = "todo-list__text";
   $text.textContent = todo.text;
@@ -332,25 +446,17 @@ function createTodoElement(todo) {
   $editButton.dataset.action = "edit";
   $editButton.textContent = "수정";
 
-  const $toggleButton = document.createElement("button");
-  $toggleButton.type = "button";
-  $toggleButton.className = "todo-list__action is-primary";
-  $toggleButton.dataset.action = "toggle";
-  $toggleButton.textContent = todo.completed ? "되돌리기" : "완료";
-
   const $deleteButton = document.createElement("button");
   $deleteButton.type = "button";
   $deleteButton.className = "todo-list__action is-danger";
   $deleteButton.dataset.action = "delete";
   $deleteButton.textContent = "삭제";
 
-  $item.append($text, $editButton, $toggleButton, $deleteButton);
+  $item.append($checkbox, $text, $editButton, $deleteButton);
   return $item;
 }
 
-/* ===========================
-   이벤트 바인딩
-   =========================== */
+/* ===== 이벤트 바인딩 ===== */
 $form.addEventListener("submit", (event) => {
   event.preventDefault();
   addTodo($input.value);
@@ -361,14 +467,14 @@ $input.addEventListener("input", () => {
 });
 
 $list.addEventListener("click", (event) => {
-  const $button = event.target.closest("button[data-action]");
-  if (!$button) return;
+  const $actor = event.target.closest("[data-action]");
+  if (!$actor) return;
 
-  const $item = $button.closest(".todo-list__item");
+  const $item = $actor.closest(".todo-list__item");
   if (!$item) return;
 
   const id = Number($item.dataset.id);
-  const action = $button.dataset.action;
+  const action = $actor.dataset.action;
 
   if (action === "edit") editTodo(id);
   if (action === "toggle") toggleTodo(id);
@@ -381,22 +487,21 @@ $filterButtons.forEach(($button) => {
   });
 });
 
-// 날짜 이동 (일간)
+// 날짜 이동
 $prevDayButton.addEventListener("click", () => shiftSelectedDay(-1));
 $nextDayButton.addEventListener("click", () => shiftSelectedDay(1));
+$goTodayButton.addEventListener("click", goToToday);
 
-// 주차 이동: selectedDate 를 7일 단위로 이동시키면 주간 뷰가 자동으로 옮겨진다.
+// 주차 이동
 $prevWeekButton.addEventListener("click", () => shiftSelectedDay(-7));
 $nextWeekButton.addEventListener("click", () => shiftSelectedDay(7));
 
-// 주간 뷰 셀 클릭: 이벤트 위임으로 어떤 날짜인지 식별
+// 주간 뷰 셀
 $weekList.addEventListener("click", (event) => {
   const $day = event.target.closest(".week-view__day");
   if (!$day) return;
   setSelectedDate($day.dataset.date);
 });
-
-// 접근성: Enter / Space 로도 날짜 선택 가능
 $weekList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const $day = event.target.closest(".week-view__day");
@@ -405,7 +510,38 @@ $weekList.addEventListener("keydown", (event) => {
   setSelectedDate($day.dataset.date);
 });
 
-/* ===========================
-   초기 렌더
-   =========================== */
+/* 달력 이벤트 */
+$dateToggleButton.addEventListener("click", toggleCalendar);
+$prevMonthButton.addEventListener("click", () => shiftCalendarMonth(-1));
+$nextMonthButton.addEventListener("click", () => shiftCalendarMonth(1));
+
+$calendarDays.addEventListener("click", (event) => {
+  const $day = event.target.closest(".calendar__day");
+  if (!$day) return;
+  selectDateFromCalendar($day.dataset.date);
+});
+$calendarDays.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const $day = event.target.closest(".calendar__day");
+  if (!$day) return;
+  event.preventDefault();
+  selectDateFromCalendar($day.dataset.date);
+});
+
+// 바깥 클릭으로 달력 닫기
+//   달력은 .date-bar 내부에 있으므로, .date-bar 바깥 클릭이면 닫는다.
+document.addEventListener("click", (event) => {
+  if (!isCalendarOpen) return;
+  if (event.target.closest(".date-bar")) return;
+  closeCalendar();
+});
+
+// Esc 로 달력 닫기
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!isCalendarOpen) return;
+  closeCalendar();
+});
+
+/* ===== 초기 렌더 ===== */
 render();
