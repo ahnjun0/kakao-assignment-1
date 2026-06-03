@@ -62,6 +62,9 @@ let calendarAnchor = getMonthStart(selectedDate); // 현재 보고 있는 달의
 //       그 값을 그대로 읽어 한 곳에서 관리한다.
 let theme = document.documentElement.getAttribute("data-theme") || "light";
 
+// 인라인 수정 중인 Todo 의 id. 없으면 null.
+let editingId = null;
+
 /* ===== DOM 참조 ===== */
 const $form = document.getElementById("todo-form");
 const $input = document.getElementById("todo-input-field");
@@ -230,18 +233,53 @@ function toggleTodo(id) {
   render();
 }
 
-function editTodo(id) {
-  const target = todos.find((todo) => todo.id === id);
-  if (!target) return;
+/* 인라인 수정 흐름
+ *   startEdit(id)   : 해당 행을 편집 모드로 전환 (input 렌더 + 자동 포커스)
+ *   commitEdit(id, text) : Enter 또는 blur. 빈 문자열/변화 없음이면 그냥 종료
+ *   cancelEdit()    : Esc. 원래 텍스트 유지
+ *
+ * 동작 원칙
+ *   - 편집 시작 시 토글/삭제 같은 액션을 그 행에서 막지는 않는다.
+ *     다른 곳을 클릭하면 input 의 blur 가 먼저 발생해 자연스럽게 커밋된다.
+ *   - 같은 텍스트로 저장하려고 하면 굳이 todos 를 새로 만들지 않는다.
+ */
 
-  const nextText = prompt("수정할 내용을 입력하세요.", target.text);
-  if (nextText === null) return;
+function startEdit(id) {
+  editingId = id;
+  render();
+}
+
+function cancelEdit() {
+  if (editingId === null) return;
+  editingId = null;
+  render();
+}
+
+function commitEdit(id, nextText) {
+  // 이미 다른 곳에서 취소되었거나 컨텍스트가 어긋난 경우 무시
+  if (editingId !== id) return;
+
   const trimmed = nextText.trim();
-  if (!trimmed) return;
+  const target = todos.find((todo) => todo.id === id);
+
+  // 대상이 사라졌거나 빈 입력이면 변경 없이 편집만 종료
+  if (!target || !trimmed) {
+    editingId = null;
+    render();
+    return;
+  }
+
+  // 변경 없으면 저장도 생략
+  if (target.text === trimmed) {
+    editingId = null;
+    render();
+    return;
+  }
 
   todos = todos.map((todo) =>
     todo.id === id ? { ...todo, text: trimmed } : todo
   );
+  editingId = null;
   saveTodos();
   render();
 }
@@ -429,6 +467,18 @@ function renderTodoList() {
 
   $emptyMessage.hidden = visibleTodos.length !== 0;
   $emptyMessage.textContent = getEmptyMessageText();
+
+  // 편집 모드면 input 에 포커스 + 커서를 텍스트 끝으로 이동
+  if (editingId !== null) {
+    const $editInput = $list.querySelector(
+      `[data-id="${editingId}"] .todo-list__edit-input`
+    );
+    if ($editInput) {
+      $editInput.focus();
+      const end = $editInput.value.length;
+      $editInput.setSelectionRange(end, end);
+    }
+  }
 }
 
 function getEmptyMessageText() {
@@ -453,6 +503,14 @@ function createTodoElement(todo) {
     todo.completed ? "완료 취소" : "완료 처리"
   );
 
+  // 편집 모드인 행은 텍스트 + 액션 버튼 대신 input + 확인 버튼을 보여준다.
+  if (todo.id === editingId) {
+    const $editInput = createEditInput(todo);
+    const $confirmButton = createConfirmButton(todo, $editInput);
+    $item.append($checkbox, $editInput, $confirmButton);
+    return $item;
+  }
+
   const $text = document.createElement("span");
   $text.className = "todo-list__text";
   $text.textContent = todo.text;
@@ -471,6 +529,55 @@ function createTodoElement(todo) {
 
   $item.append($checkbox, $text, $editButton, $deleteButton);
   return $item;
+}
+
+// 편집용 input 엘리먼트.
+// 다른 곳은 이벤트 위임으로 처리하지만, keydown(Enter/Esc) 은 위임이 어색해
+// 여기서 직접 리스너를 단다.
+function createEditInput(todo) {
+  const $editInput = document.createElement("input");
+  $editInput.type = "text";
+  $editInput.className = "todo-list__edit-input";
+  $editInput.value = todo.text;
+  $editInput.setAttribute("aria-label", "할 일 수정");
+
+  $editInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitEdit(todo.id, $editInput.value);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEdit();
+    }
+  });
+
+  // 포커스를 잃으면 자동 저장. Esc 로 취소한 경우엔 editingId 가 이미 null 이라
+  // commitEdit 내부에서 자연스럽게 무시된다.
+  $editInput.addEventListener("blur", () => {
+    commitEdit(todo.id, $editInput.value);
+  });
+
+  return $editInput;
+}
+
+// 인라인 수정 모드의 "확인" 버튼.
+// 주의: mousedown 의 preventDefault 가 있어야 input 이 포커스를 잃지 않아
+//       blur → commitEdit 가 click 보다 먼저 호출되는 어색한 흐름을 막을 수 있다.
+function createConfirmButton(todo, $editInput) {
+  const $button = document.createElement("button");
+  $button.type = "button";
+  $button.className = "todo-list__action is-primary";
+  $button.textContent = "확인";
+  $button.setAttribute("aria-label", "수정 완료");
+
+  $button.addEventListener("mousedown", (event) => {
+    event.preventDefault(); // 포커스를 input 에 유지
+  });
+  $button.addEventListener("click", () => {
+    commitEdit(todo.id, $editInput.value);
+  });
+
+  return $button;
 }
 
 /* ===== 이벤트 바인딩 ===== */
@@ -493,9 +600,18 @@ $list.addEventListener("click", (event) => {
   const id = Number($item.dataset.id);
   const action = $actor.dataset.action;
 
-  if (action === "edit") editTodo(id);
+  if (action === "edit") startEdit(id);
   if (action === "toggle") toggleTodo(id);
   if (action === "delete") deleteTodo(id);
+});
+
+// 텍스트 더블클릭으로도 편집 모드 진입
+$list.addEventListener("dblclick", (event) => {
+  const $text = event.target.closest(".todo-list__text");
+  if (!$text) return;
+  const $item = $text.closest(".todo-list__item");
+  if (!$item) return;
+  startEdit(Number($item.dataset.id));
 });
 
 $filterButtons.forEach(($button) => {
