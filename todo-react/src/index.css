@@ -2,9 +2,8 @@
  * @import 한 줄로 Preflight(리셋) + 유틸리티 클래스가 전부 로드된다. */
 @import "tailwindcss";
 
-/* @theme 블록은 Tailwind v4 디자인 토큰 선언부.
+/* @theme 블록은 Tailwind v4 디자인 토큰 선언부 (라이트 기본값).
  * 여기에 --color-foo 로 등록한 값은 자동으로 bg-foo, text-foo, border-foo 유틸리티가 된다.
- * 1차(todo-vanilla/style.css) 에서 쓴 토큰을 그대로 옮겨 디자인 일관성을 유지한다.
  *
  * 주의: 1차의 --color-text / --color-text-muted 는
  *       Tailwind 의 기본 키워드(text-*)와 시각적으로 헷갈리므로
@@ -20,8 +19,22 @@
   --color-danger: #d64545;
 }
 
-/* 전역 베이스 — 1차의 body 스타일과 동일하게 맞춘다.
- * Tailwind Preflight 다음에 적용되도록 일반 CSS 로 적는다. */
+/* 다크 모드 토큰.
+ * <html data-theme="dark"> 일 때 위 @theme 변수들을 덮어쓴다.
+ * Tailwind v4 유틸리티(bg-bg, text-ink 등) 는 결국 var(--color-*) 로 컴파일되므로
+ * 변수만 갈아끼우면 모든 유틸리티가 다크 색을 자동으로 사용한다.
+ * --color-primary 는 두 모드 공통 (브랜드 컬러 유지). */
+[data-theme="dark"] {
+  --color-primary-soft: #2a1f4a;
+  --color-ink: #e8e8ec;
+  --color-muted: #8a8a93;
+  --color-border: #2a2a33;
+  --color-bg: #14141a;
+  --color-surface: #1e1e26;
+  --color-danger: #ef6262;
+}
+
+/* 전역 베이스 — 1차의 body 스타일과 동일하게 맞춘다. */
 body {
   margin: 0;
   background: var(--color-bg);

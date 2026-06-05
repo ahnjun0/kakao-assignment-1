@@ -5,6 +5,37 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Todo (React)</title>
+    <!--
+      FOUC(Flash Of Unstyled Content) 방지 부트스트랩 스크립트.
+      React 가 마운트되기 전에 동기적으로 실행해서 <html> 의 data-theme 을
+      미리 세팅한다. 그렇지 않으면 라이트 → 다크 깜빡임이 생긴다.
+
+      우선순위:
+        1) localStorage 'theme' ('light' | 'dark')
+        2) 시스템 prefers-color-scheme
+        3) 폴백: 'light'
+    -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var theme;
+          if (saved === 'dark' || saved === 'light') {
+            theme = saved;
+          } else if (
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+          ) {
+            theme = 'dark';
+          } else {
+            theme = 'light';
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
