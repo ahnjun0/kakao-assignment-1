@@ -17,22 +17,24 @@ import { todayString, addDays } from '../utils/date'
  * 자식 → 부모: 콜백 호출로 변경을 요청한다 (직접 todos 를 바꾸지 않는다).
  *
  * [불변 업데이트 원칙]
- * setTodos 에는 항상 새 배열을 넘긴다 (push 같은 mutate 금지).
- * map/filter 가 새 배열을 만들기 때문에 React 가 변경을 정확히 감지한다. */
+ * setTodos 에는 항상 새 배열을 넘긴다 (push 같은 mutate 금지). */
 
 // --- 순수 함수: 컴포넌트 바깥에 둬서 렌더마다 재생성되지 않게 한다 ---
 
-// 현재 필터에 맞춰 todos 를 거른 새 배열을 돌려준다.
-function getVisibleTodos(todos, filter) {
-  if (filter === 'active') return todos.filter((todo) => !todo.done)
-  if (filter === 'done') return todos.filter((todo) => todo.done)
-  return todos
+// 1단계: 선택된 날짜와 같은 항목만 남긴다.
+// 2단계: 현재 필터(all/active/done) 로 다시 거른다.
+// 새 todos/날짜/필터가 바뀔 때마다 렌더 본문에서 다시 계산된다 (파생값).
+function getVisibleTodos(todos, selectedDate, filter) {
+  const sameDate = todos.filter((todo) => todo.date === selectedDate)
+  if (filter === 'active') return sameDate.filter((todo) => !todo.done)
+  if (filter === 'done') return sameDate.filter((todo) => todo.done)
+  return sameDate
 }
 
-// 빈 상태에서 보여줄 안내 문구.
-// 필터에 따라 다른 문구를 보여줘야 "필터 때문인지, 정말 데이터가 없는지" 가 명확해진다.
+// 빈 상태 안내 문구.
+// 전체 탭에서 비어 있으면 "이 날짜에 등록된 게 없다"는 의미이므로 날짜 기반 문구를 쓴다.
 const EMPTY_MESSAGE = {
-  all: '등록된 할 일이 없습니다.',
+  all: '이 날짜에 등록된 할 일이 없습니다.',
   active: '진행 중인 할 일이 없습니다.',
   done: '완료된 할 일이 없습니다.',
 }
@@ -42,7 +44,8 @@ function TodoApp() {
   const [selectedDate, setSelectedDate] = useState(todayString())
   const [currentFilter, setCurrentFilter] = useState('all')
 
-  // 새 Todo 추가. date 는 현재 selectedDate 로 자동 주입 (5단계에서 거를 때 사용).
+  // 새 Todo 추가. date 는 현재 selectedDate 로 자동 주입.
+  // → 다른 날짜로 이동했다가 추가하면 그 날짜에 묶인다.
   function handleAdd(text) {
     const newTodo = {
       id: crypto.randomUUID(),
@@ -80,10 +83,8 @@ function TodoApp() {
     setSelectedDate((current) => addDays(current, 1))
   }
 
-  // 표시할 todos 는 currentFilter 로 거른 결과.
-  // useEffect 가 아니라 렌더 본문에서 계산 — 파생값이므로 (React 원칙 3).
-  // 일간 뷰(selectedDate 분기) 는 5단계에서 추가한다.
-  const visibleTodos = getVisibleTodos(todos, currentFilter)
+  // 표시할 todos 는 selectedDate + currentFilter 둘 다 적용한 결과.
+  const visibleTodos = getVisibleTodos(todos, selectedDate, currentFilter)
   const emptyMessage = EMPTY_MESSAGE[currentFilter]
 
   return (
