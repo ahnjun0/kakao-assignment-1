@@ -33,3 +33,22 @@ export function formatKoreanDate(dateString) {
   const weekday = WEEKDAYS[date.getDay()]
   return `${y}년 ${m}월 ${d}일 (${weekday})`
 }
+
+// 주어진 날짜가 속한 주의 월요일을 돌려준다.
+// getDay() 는 0=일, 1=월, ..., 6=토.
+// 일요일(0)이면 직전 월요일까지 6일을 빼고, 그 외엔 (day-1) 일을 뺀다.
+export function getWeekStart(dateString) {
+  const [y, m, d] = dateString.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const day = date.getDay()
+  const diff = day === 0 ? 6 : day - 1
+  date.setDate(date.getDate() - diff)
+  return formatDate(date)
+}
+
+// weekStart 부터 7일치 'YYYY-MM-DD' 배열을 돌려준다 (월~일).
+export function getWeekDays(weekStartDateString) {
+  return Array.from({ length: 7 }, (_, i) =>
+    addDays(weekStartDateString, i),
+  )
+}

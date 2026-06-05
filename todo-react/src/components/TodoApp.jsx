@@ -1,33 +1,34 @@
 import { useEffect, useState } from 'react'
 import DateHeader from './DateHeader'
+import WeekView from './WeekView'
 import TodoInput from './TodoInput'
 import FilterTabs from './FilterTabs'
 import TodoList from './TodoList'
-import { todayString, addDays } from '../utils/date'
+import { todayString, addDays, getWeekStart } from '../utils/date'
 
 /* TodoApp — 모든 상태와 핸들러의 단일 출처(single source of truth).
  *
  * [상태]
- * - todos: { id, text, done, date } 배열 (localStorage 에 영속화)
- * - selectedDate: 'YYYY-MM-DD' (일간 뷰가 보고 있는 날짜 — 새로고침 시 오늘로 초기화)
- * - currentFilter: 'all' | 'active' | 'done' (새로고침 시 'all' 로 초기화)
+ * - todos: { id, text, done, date } 배열 (localStorage 영속화)
+ * - selectedDate: 'YYYY-MM-DD' (일간 뷰가 보고 있는 날짜)
+ * - currentFilter: 'all' | 'active' | 'done'
+ * - weekStartDate: 'YYYY-MM-DD' (주간 뷰의 월요일, localStorage 영속화)
  *
  * [데이터 흐름] (단방향)
  * 부모 → 자식: props 로 값과 콜백을 내려준다.
  * 자식 → 부모: 콜백 호출로 변경을 요청한다 (직접 todos 를 바꾸지 않는다).
  *
- * [영속화 전략]
- * - todos 만 저장. 화면 상태(selectedDate/currentFilter) 는 매번 초기화되는 편이 자연스럽다.
- * - 함수형 초기화 useState(() => ...) 로 마운트 시 1회만 localStorage 를 읽는다.
- * - useEffect([todos]) 로 변경 시마다 자동 저장 (외부 동기화는 effect 전용 — React 원칙 3). */
+ * [selectedDate ↔ weekStartDate 관계]
+ * 두 값은 독립 state. 사용자는 주차만 미리보고 싶을 수 있다 (selectedDate 는 유지한 채로).
+ * 단, 일간 ◀/▶ 으로 selectedDate 가 현재 주 범위를 벗어나면
+ * 주간 뷰가 자동으로 따라간다 (UX 일관성). 이건 effect 가 아니라 핸들러에서 즉시 처리. */
 
-const STORAGE_KEY = 'todos'
+const STORAGE_KEY_TODOS = 'todos'
+const STORAGE_KEY_WEEK = 'weekStartDate'
 
-// 저장된 todos 를 안전하게 불러온다.
-// JSON 파싱 실패 / 형식이 배열이 아닌 경우 등 어떤 이상 상황에서도 빈 배열로 폴백한다.
 function loadTodos() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(STORAGE_KEY_TODOS)
     if (!saved) return []
     const parsed = JSON.parse(saved)
     return Array.isArray(parsed) ? parsed : []
@@ -36,7 +37,16 @@ function loadTodos() {
   }
 }
 
-// --- 순수 함수: 컴포넌트 바깥에 둬서 렌더마다 재생성되지 않게 한다 ---
+// 저장된 weekStartDate 를 안전하게 불러온다. 형식이 'YYYY-MM-DD' 가 아니면 폴백.
+function loadWeekStart() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_WEEK)
+    if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved
+  } catch {}
+  return getWeekStart(todayString())
+}
+
+// --- 순수 함수 ---
 
 function getVisibleTodos(todos, selectedDate, filter) {
   const sameDate = todos.filter((todo) => todo.date === selectedDate)
@@ -52,17 +62,22 @@ const EMPTY_MESSAGE = {
 }
 
 function TodoApp() {
-  // 함수형 초기화: loadTodos() 는 마운트 시 딱 한 번만 호출된다.
-  // 매 렌더마다 localStorage 를 읽는 낭비를 막기 위한 패턴.
   const [todos, setTodos] = useState(loadTodos)
   const [selectedDate, setSelectedDate] = useState(todayString())
   const [currentFilter, setCurrentFilter] = useState('all')
+  const [weekStartDate, setWeekStartDate] = useState(loadWeekStart)
 
-  // todos 가 바뀔 때마다 localStorage 에 자동 저장.
-  // 의존성 배열에 todos 가 있어야 변경이 감지된다 — 빼면 첫 마운트 때만 저장돼 무용지물.
+  // 오늘 날짜는 컴포넌트가 살아있는 동안 고정으로 본다 (자정 넘김 처리는 범위 밖).
+  const todayDate = todayString()
+
+  // 영속화: todos / weekStartDate 가 바뀔 때마다 자동 저장.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+    localStorage.setItem(STORAGE_KEY_TODOS, JSON.stringify(todos))
   }, [todos])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_WEEK, weekStartDate)
+  }, [weekStartDate])
 
   function handleAdd(text) {
     const newTodo = {
@@ -94,11 +109,38 @@ function TodoApp() {
     setTodos((current) => current.filter((todo) => todo.id !== id))
   }
 
+  // selectedDate 가 weekStartDate ~ weekStartDate+6 범위 안인지 확인.
+  // 문자열 'YYYY-MM-DD' 는 사전식 비교가 곧 날짜 비교라 < > 가 그대로 동작한다.
+  function ensureWeekContains(dateString) {
+    const weekEnd = addDays(weekStartDate, 6)
+    if (dateString < weekStartDate || dateString > weekEnd) {
+      setWeekStartDate(getWeekStart(dateString))
+    }
+  }
+
+  // 일간 ◀/▶: selectedDate 이동 + 필요시 주간 뷰 따라가기.
   function handlePrevDay() {
-    setSelectedDate((current) => addDays(current, -1))
+    const next = addDays(selectedDate, -1)
+    setSelectedDate(next)
+    ensureWeekContains(next)
   }
   function handleNextDay() {
-    setSelectedDate((current) => addDays(current, 1))
+    const next = addDays(selectedDate, 1)
+    setSelectedDate(next)
+    ensureWeekContains(next)
+  }
+
+  // 주간 ◀/▶: 주만 이동, selectedDate 는 그대로.
+  function handlePrevWeek() {
+    setWeekStartDate((current) => addDays(current, -7))
+  }
+  function handleNextWeek() {
+    setWeekStartDate((current) => addDays(current, 7))
+  }
+
+  // WeekView 칸 클릭 → selectedDate 만 변경 (주는 그대로).
+  function handleSelectDate(dateString) {
+    setSelectedDate(dateString)
   }
 
   const visibleTodos = getVisibleTodos(todos, selectedDate, currentFilter)
@@ -115,6 +157,16 @@ function TodoApp() {
           selectedDate={selectedDate}
           onPrevDay={handlePrevDay}
           onNextDay={handleNextDay}
+        />
+
+        <WeekView
+          weekStartDate={weekStartDate}
+          selectedDate={selectedDate}
+          todayDate={todayDate}
+          todos={todos}
+          onSelectDate={handleSelectDate}
+          onPrevWeek={handlePrevWeek}
+          onNextWeek={handleNextWeek}
         />
 
         <TodoInput onAdd={handleAdd} />
