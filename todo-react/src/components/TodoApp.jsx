@@ -9,25 +9,56 @@ import { todayString, addDays } from '../utils/date'
  *
  * [상태]
  * - todos: { id, text, done, date } 배열
- * - selectedDate: 'YYYY-MM-DD'
+ * - selectedDate: 'YYYY-MM-DD' (일간 뷰가 보고 있는 날짜)
  * - currentFilter: 'all' | 'active' | 'done'
  *
  * [데이터 흐름] (단방향)
- * 부모 → 자식: props 로 값과 콜백을 내려준다.
- * 자식 → 부모: 콜백 호출로 변경을 요청한다 (자식이 직접 todos 를 바꾸지 않는다).
+ * 부모(TodoApp) → 자식: props 로 값과 콜백을 내려준다.
+ * 자식 → 부모: 콜백 호출로 변경을 요청한다. 자식이 직접 todos 를 바꾸지 않는다.
  *
- * 골격 단계라 CRUD 핸들러는 시그니처만 잡고 본문은 3단계(미션 2)에서 채운다.
- * 외곽 카드 스타일은 1차의 .app 컨테이너와 동일한 폭/여백/그림자를 쓴다. */
+ * [불변 업데이트 원칙]
+ * setTodos 에는 항상 새 배열을 넘긴다 (todos.push 같은 mutate 금지).
+ * map/filter 가 새 배열을 만들기 때문에 React 가 변경을 정확히 감지한다. */
 function TodoApp() {
   const [todos, setTodos] = useState([])
   const [selectedDate, setSelectedDate] = useState(todayString())
   const [currentFilter, setCurrentFilter] = useState('all')
 
-  // --- 핸들러 시그니처만 — 실제 로직은 3단계부터 ---
-  function handleAdd(text) {}
-  function handleToggle(id) {}
-  function handleEdit(id, nextText) {}
-  function handleDelete(id) {}
+  // 새 Todo 추가.
+  // 빈 입력 가드는 TodoInput 에서 처리하므로 여기서는 받은 텍스트를 그대로 신뢰한다.
+  // date 는 현재 선택된 날짜로 자동 주입 — 4단계(일간 뷰)에서 이 값으로 거른다.
+  function handleAdd(text) {
+    const newTodo = {
+      id: crypto.randomUUID(),
+      text,
+      done: false,
+      date: selectedDate,
+    }
+    setTodos((current) => [...current, newTodo])
+  }
+
+  // 완료/미완료 토글. 해당 id 만 done 을 뒤집고 나머지는 그대로 둔다.
+  function handleToggle(id) {
+    setTodos((current) =>
+      current.map((todo) =>
+        todo.id === id ? { ...todo, done: !todo.done } : todo,
+      ),
+    )
+  }
+
+  // 인라인 수정. 빈 문자열은 TodoItem 쪽에서 걸렀다고 가정한다.
+  function handleEdit(id, nextText) {
+    setTodos((current) =>
+      current.map((todo) =>
+        todo.id === id ? { ...todo, text: nextText } : todo,
+      ),
+    )
+  }
+
+  // 삭제.
+  function handleDelete(id) {
+    setTodos((current) => current.filter((todo) => todo.id !== id))
+  }
 
   function handlePrevDay() {
     setSelectedDate((current) => addDays(current, -1))
@@ -38,14 +69,12 @@ function TodoApp() {
 
   // 표시할 todos 는 selectedDate + currentFilter 로 거른 결과.
   // useEffect 가 아니라 렌더 본문에서 계산 — 파생값이므로(React 원칙 3).
-  // 골격 단계라 필터링은 비워두고 그대로 넘긴다.
+  // 골격 단계라 아직 필터링/날짜 분리는 적용하지 않고 전체를 넘긴다 (다음 단계에서 추가).
   const visibleTodos = todos
 
   return (
     <main className="min-h-screen bg-bg">
-      {/* 1차 .app: max-width 520px, my-12 (48px), p-6 (24px), bg-surface, rounded-md, shadow-sm */}
       <section className="max-w-[520px] mx-auto my-12 p-6 bg-surface rounded-[10px] shadow-sm">
-        {/* 헤더: 제목만 (테마 토글은 추후) */}
         <header className="flex items-center justify-between mb-4">
           <h1 className="m-0 text-2xl text-primary font-medium">Todo</h1>
         </header>
