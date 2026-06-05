@@ -1,19 +1,33 @@
 /* Tailwind CSS v4 진입점.
- * @import 한 줄로 Preflight(리셋) + 유틸리티 클래스가 모두 로드된다. */
+ * @import 한 줄로 Preflight(리셋) + 유틸리티 클래스가 전부 로드된다. */
 @import "tailwindcss";
 
-/* @theme 블록은 Tailwind v4의 디자인 토큰 선언부.
- * 여기에 등록한 CSS 변수는 자동으로 유틸리티 클래스로도 노출된다.
- * 예: --color-primary → bg-primary / text-primary / border-primary 등. */
+/* @theme 블록은 Tailwind v4 디자인 토큰 선언부.
+ * 여기에 --color-foo 로 등록한 값은 자동으로 bg-foo, text-foo, border-foo 유틸리티가 된다.
+ * 1차(todo-vanilla/style.css) 에서 쓴 토큰을 그대로 옮겨 디자인 일관성을 유지한다.
+ *
+ * 주의: 1차의 --color-text / --color-text-muted 는
+ *       Tailwind 의 기본 키워드(text-*)와 시각적으로 헷갈리므로
+ *       --color-ink / --color-muted 로 살짝 개명한다. */
 @theme {
   --color-primary: #672be0;
+  --color-primary-soft: #f1ebfd;
+  --color-ink: #1f1f1f;
+  --color-muted: #8a8a8a;
+  --color-border: #e6e6e6;
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-danger: #d64545;
 }
 
-/* 앱 전역 기본값. body 여백 제거 + 시스템 폰트.
- * 화면 톤(밝은 회색 배경)은 1차와 동일하게 잡아둔다. */
+/* 전역 베이스 — 1차의 body 스타일과 동일하게 맞춘다.
+ * Tailwind Preflight 다음에 적용되도록 일반 CSS 로 적는다. */
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background-color: #f5f5f7;
-  color: #1f1f24;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+    Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
 }
