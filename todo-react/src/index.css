@@ -1,0 +1,19 @@
+/* Tailwind CSS v4 진입점.
+ * @import 한 줄로 Preflight(리셋) + 유틸리티 클래스가 모두 로드된다. */
+@import "tailwindcss";
+
+/* @theme 블록은 Tailwind v4의 디자인 토큰 선언부.
+ * 여기에 등록한 CSS 변수는 자동으로 유틸리티 클래스로도 노출된다.
+ * 예: --color-primary → bg-primary / text-primary / border-primary 등. */
+@theme {
+  --color-primary: #672be0;
+}
+
+/* 앱 전역 기본값. body 여백 제거 + 시스템 폰트.
+ * 화면 톤(밝은 회색 배경)은 1차와 동일하게 잡아둔다. */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-color: #f5f5f7;
+  color: #1f1f24;
+}
