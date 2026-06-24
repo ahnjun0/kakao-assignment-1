@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (실제 비밀값은 *.local에만 두고, *.example만 커밋한다)
+.env
+.env*.local
 
 # vercel
 .vercel

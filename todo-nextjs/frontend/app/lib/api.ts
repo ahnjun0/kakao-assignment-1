@@ -15,8 +15,13 @@ export interface Todo {
 }
 
 // 서버(Node) 컨텍스트에서만 읽는 변수라 NEXT_PUBLIC_ 접두사를 붙이지 않는다.
-export const BACKEND_URL =
-  process.env.BACKEND_URL ?? "http://localhost:8000";
+// .env.local에 BACKEND_URL을 반드시 설정해야 한다 (.env.local.example 참고).
+if (!process.env.BACKEND_URL) {
+  throw new Error(
+    "BACKEND_URL 환경변수가 설정되지 않았습니다. .env.local에 BACKEND_URL을 정의해주세요.",
+  );
+}
+export const BACKEND_URL: string = process.env.BACKEND_URL;
 
 /** 전체 Todo 목록을 가져온다. cache: 'no-store'로 항상 최신 데이터. */
 export async function fetchTodos(): Promise<Todo[]> {

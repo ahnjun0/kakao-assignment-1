@@ -12,9 +12,11 @@
 가이드 권장대로 단일 파일에 담는다. 미션 6에서 DATABASE_URL을 .env.local로 분리.
 """
 
+import os
 from datetime import datetime, timezone
 from typing import Generator
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,9 +27,17 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # 1. DB 설정
 # ---------------------------------------------------------------------------
 
-# SQLite 파일 경로. 미션 6에서 환경변수(DATABASE_URL)로 분리할 예정이라
-# 일단 상수로 둔다. check_same_thread=False는 SQLite + FastAPI 조합 권장.
-DATABASE_URL = "sqlite:///./todos.db"
+# .env.local을 우선 로드한다 (없으면 무시).
+# python-dotenv는 기본적으로 .env를 찾으므로 파일명을 명시한다.
+load_dotenv(".env.local")
+
+# DATABASE_URL은 .env.local에 반드시 설정되어 있어야 한다 (.env.local.example 참고).
+# check_same_thread=False는 SQLite + FastAPI(스레드) 조합에서 표준 권장 설정.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL 환경변수가 설정되지 않았습니다. .env.local을 확인해주세요."
+    )
 
 engine = create_engine(
     DATABASE_URL,
