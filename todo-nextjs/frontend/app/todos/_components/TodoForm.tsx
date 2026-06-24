@@ -12,7 +12,7 @@
  * (Server Component → Client로 함수 props를 직렬화 전달할 수 없기 때문.)
  */
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { createTodo, updateTodo } from "@/app/actions";
@@ -27,6 +27,10 @@ interface Props {
 
 export default function TodoForm({ mode, todoId, initialTitle = "" }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // 폼 제출 후 목록으로 돌아갈 때 기존 필터/검색 상태를 유지하기 위해 보존한다.
+  const queryString = searchParams.toString();
+  const listHref = queryString ? `/todos?${queryString}` : "/todos";
   const [title, setTitle] = useState(initialTitle);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -48,7 +52,7 @@ export default function TodoForm({ mode, todoId, initialTitle = "" }: Props) {
           await updateTodo(todoId, { title: trimmed });
         }
         // 성공 시 목록으로 돌아간다. revalidate는 Server Action 안에서 처리.
-        router.push("/todos");
+        router.push(listHref);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "요청 실패");
       }
@@ -83,7 +87,7 @@ export default function TodoForm({ mode, todoId, initialTitle = "" }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => router.push("/todos")}
+          onClick={() => router.push(listHref)}
           disabled={isPending}
           className="rounded-full border border-zinc-200 bg-white px-4 py-3 text-zinc-600 transition hover:bg-zinc-50"
         >

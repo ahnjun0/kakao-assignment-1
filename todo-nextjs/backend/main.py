@@ -17,7 +17,9 @@ from datetime import datetime, timezone
 from typing import Generator
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from typing import Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine
@@ -153,9 +155,24 @@ def root() -> dict[str, str]:
 
 
 @app.get("/todos", response_model=list[TodoOut])
-def list_todos(db: Session = Depends(get_db)) -> list[Todo]:
-    """전체 Todo 목록을 created_at 오름차순으로 반환한다."""
-    return db.query(Todo).order_by(Todo.created_at.asc()).all()
+def list_todos(
+    db: Session = Depends(get_db),
+    filter: Literal["all", "active", "completed"] = Query(default="all"),
+) -> list[Todo]:
+    """
+    Todo 목록을 created_at 오름차순으로 반환한다.
+
+    `filter` 쿼리 파라미터로 서버 측에서 직접 필터링한다 (도전 1).
+    - all: 전체
+    - active: 미완료(completed=False)
+    - completed: 완료(completed=True)
+    """
+    query = db.query(Todo)
+    if filter == "active":
+        query = query.filter(Todo.completed.is_(False))
+    elif filter == "completed":
+        query = query.filter(Todo.completed.is_(True))
+    return query.order_by(Todo.created_at.asc()).all()
 
 
 @app.post("/todos", response_model=TodoOut, status_code=status.HTTP_201_CREATED)
