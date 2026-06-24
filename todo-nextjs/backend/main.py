@@ -158,20 +158,26 @@ def root() -> dict[str, str]:
 def list_todos(
     db: Session = Depends(get_db),
     filter: Literal["all", "active", "completed"] = Query(default="all"),
+    search: str | None = Query(default=None),
 ) -> list[Todo]:
     """
     Todo 목록을 created_at 오름차순으로 반환한다.
 
-    `filter` 쿼리 파라미터로 서버 측에서 직접 필터링한다 (도전 1).
-    - all: 전체
-    - active: 미완료(completed=False)
-    - completed: 완료(completed=True)
+    서버 측에서 직접 필터링한다:
+    - `filter` (도전 1): all / active / completed
+    - `search` (도전 2): title에 키워드가 포함된 항목만. 대소문자 구분 없음(ilike).
+    두 조건은 동시에 적용 가능 (예: ?filter=active&search=보고서).
     """
     query = db.query(Todo)
     if filter == "active":
         query = query.filter(Todo.completed.is_(False))
     elif filter == "completed":
         query = query.filter(Todo.completed.is_(True))
+
+    if search:
+        # SQLAlchemy ilike: 대소문자 구분 없는 부분 일치.
+        query = query.filter(Todo.title.ilike(f"%{search}%"))
+
     return query.order_by(Todo.created_at.asc()).all()
 
 
