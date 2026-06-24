@@ -3,34 +3,68 @@
 /**
  * Server Actions (CRUD 진입점).
  *
- * 미션 4에서는 시그니처와 호출 흐름만 잡아 두고,
- * 실제 FastAPI 호출은 미션 5에서 채운다 (route.ts와 함께).
+ * 호출 흐름: Client Component → 본 파일 함수 → FastAPI → 응답 → revalidate.
  *
- * route.ts(API Route, HTTP 프록시)와 차이:
- * - actions.ts는 Client/Server Component에서 함수처럼 직접 import해서 호출한다.
- * - route.ts는 외부에서 fetch('/api/todos')로 호출한다.
+ * route.ts(API Route)와의 역할 구분:
+ * - actions.ts(여기): 컴포넌트에서 함수처럼 직접 import해서 호출하는 mutation 진입점.
+ *   호출 후 revalidatePath로 캐시 무효화까지 책임진다.
+ * - route.ts: 외부에서 HTTP로 들어오는 요청(fetch('/api/todos'))을 받아 FastAPI에 위임.
  *
- * 두 방식을 분리한 이유는 가이드의 학습 포인트(역할 구분)에 맞추기 위함이다.
+ * 두 함수가 모두 BACKEND_URL을 부르지만, "어디서 호출되느냐"가 다르다.
  */
 
-export async function createTodo(_title: string): Promise<void> {
-  throw new Error("createTodo는 미션 5에서 구현됩니다.");
+import { revalidatePath } from "next/cache";
+
+import { BACKEND_URL } from "./lib/api";
+
+async function callBackend(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    cache: "no-store",
+    ...init,
+  });
+  if (!response.ok) {
+    throw new Error(
+      `백엔드 요청 실패 (path=${path}, status=${response.status})`,
+    );
+  }
+  return response;
+}
+
+export async function createTodo(title: string): Promise<void> {
+  await callBackend("/todos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  // /todos 페이지의 fetch 결과를 무효화해 새 항목이 즉시 보이도록 한다.
+  revalidatePath("/todos");
 }
 
 export async function updateTodo(
-  _todoId: number,
-  _payload: { title?: string; completed?: boolean },
+  todoId: number,
+  payload: { title?: string; completed?: boolean },
 ): Promise<void> {
-  throw new Error("updateTodo는 미션 5에서 구현됩니다.");
+  await callBackend(`/todos/${todoId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/todos");
+  revalidatePath(`/todos/${todoId}`);
 }
 
+/** 토글은 updateTodo의 얇은 래퍼. UI 측에서 의도를 드러내려고 따로 둔다. */
 export async function toggleTodo(
-  _todoId: number,
-  _completed: boolean,
+  todoId: number,
+  completed: boolean,
 ): Promise<void> {
-  throw new Error("toggleTodo는 미션 5에서 구현됩니다.");
+  await updateTodo(todoId, { completed });
 }
 
-export async function deleteTodo(_todoId: number): Promise<void> {
-  throw new Error("deleteTodo는 미션 5에서 구현됩니다.");
+export async function deleteTodo(todoId: number): Promise<void> {
+  await callBackend(`/todos/${todoId}`, { method: "DELETE" });
+  revalidatePath("/todos");
 }
