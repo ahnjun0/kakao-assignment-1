@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/*
+  2차 과제(React)에서 사용한 메인 컬러(#672be0)를 그대로 이식한다.
+  Tailwind v4의 @theme 블록에서 토큰을 선언하면
+  bg-primary / text-primary / border-primary 등의 유틸리티가 자동 생성된다.
+*/
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme {
+  --color-primary: #672be0;
+  --color-primary-soft: #f1ebfb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
