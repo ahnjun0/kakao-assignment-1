@@ -41,6 +41,31 @@ export function shiftDate(value: string, days: number): string {
   return formatLocalDate(d);
 }
 
+/**
+ * 주의 시작일(월요일)을 YYYY-MM-DD로 반환한다.
+ * JS `getDay()`는 0=일, 1=월, ..., 6=토. 월요일을 시작으로 잡기 위해
+ * 일요일(0)은 -6일, 그 외 요일은 (1 - day)일 만큼 이동한다.
+ */
+export function startOfWeek(value: string): string {
+  const d = parseLocalDate(value) ?? new Date();
+  const day = d.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  const start = new Date(d);
+  start.setDate(d.getDate() + offset);
+  return formatLocalDate(start);
+}
+
+/** 시작일(weekStart, 보통 월요일)로부터 7일치 날짜를 YYYY-MM-DD 배열로. */
+export function weekDates(weekStart: string): string[] {
+  const start = parseLocalDate(weekStart);
+  if (!start) return [];
+  return Array.from({ length: 7 }, (_, index) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + index);
+    return formatLocalDate(d);
+  });
+}
+
 /** 화면 표시용 한국어 라벨. 예: "2026년 6월 24일 (수)". */
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 export function formatDisplayLabel(value: string): string {
@@ -49,4 +74,18 @@ export function formatDisplayLabel(value: string): string {
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${
     WEEKDAY_KO[d.getDay()]
   })`;
+}
+
+/** 주간 뷰 칸에 표시할 짧은 라벨 ("월", "화", ...). */
+export function weekdayShort(value: string): string {
+  const d = parseLocalDate(value);
+  if (!d) return "";
+  return WEEKDAY_KO[d.getDay()];
+}
+
+/** 주간 뷰 칸에 표시할 일자(day of month). */
+export function dayOfMonth(value: string): number {
+  const d = parseLocalDate(value);
+  if (!d) return 0;
+  return d.getDate();
 }

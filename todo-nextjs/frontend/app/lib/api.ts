@@ -61,6 +61,31 @@ export async function fetchTodos(
   return response.json();
 }
 
+/**
+ * 주간 뷰용 날짜별 Todo 개수 (주차 시작~끝, 양 끝 포함).
+ * 백엔드는 개수가 0인 날짜를 응답에 포함하지 않으므로,
+ * 호출 측에서 비어 있는 날짜를 0으로 채워 7일 표시에 사용한다.
+ */
+export interface TodoCount {
+  date: string;
+  count: number;
+}
+
+export async function fetchTodoCounts(
+  from: string,
+  to: string,
+): Promise<Record<string, number>> {
+  const url = `${BACKEND_URL}/todos/counts?from=${from}&to=${to}`;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(
+      `Todo 개수 집계를 불러오지 못했습니다 (status: ${response.status})`,
+    );
+  }
+  const list: TodoCount[] = await response.json();
+  return Object.fromEntries(list.map((entry) => [entry.date, entry.count]));
+}
+
 /** 단건 Todo를 가져온다. 백엔드에 단건 조회 API가 없으니 전체에서 필터링한다. */
 export async function fetchTodo(todoId: number): Promise<Todo | null> {
   // 단건 조회용으로는 date 필터를 걸지 않는다 (수정 페이지가 어느 날짜든 진입 가능해야 함).

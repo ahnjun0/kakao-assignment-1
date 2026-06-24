@@ -84,6 +84,7 @@ npm run dev                  # http://localhost:3000
 ### 2차 연속성 추가 작업
 
 - [x] **일간 뷰 (2차 미션 4 이식)**: `Todo.date` 컬럼 추가, 날짜 헤더(이전/오늘/다음), URL `?date=YYYY-MM-DD` 동기화, 생성 시 현재 보고 있는 날짜에 자동 귀속. `date` / `filter` / `search`가 모두 동시 적용 가능.
+- [x] **주간 뷰 (2차 도전 이식)**: 월~일 7칸, 각 날짜 아래 Todo 개수, 오늘/선택일 강조, 이전 주/다음 주 이동. 카운트는 백엔드의 새 엔드포인트 `GET /todos/counts?from=...&to=...`에서 SQLAlchemy `group_by`로 집계.
 
 ---
 
@@ -102,6 +103,7 @@ npm run dev                  # http://localhost:3000
 | `_components/FilterTabs.tsx` | **Client** | useSearchParams, useRouter, 탭 onClick |
 | `_components/SearchBar.tsx` | **Client** | useState + useEffect 디바운스, useSearchParams |
 | `_components/DateHeader.tsx` | **Client** | 이전/오늘/다음 onClick, useSearchParams/useRouter |
+| `_components/WeekView.tsx` | **Client** | 7칸 onClick, 주차 이동 onClick, useSearchParams/useRouter |
 
 ## `route.ts` vs `actions.ts`
 
@@ -128,8 +130,7 @@ npm run dev                  # http://localhost:3000
 
 ### 다음에 시도해보고 싶은 것
 
-- 2차의 주간 뷰 이식 (날짜별 카운트, 주차 이동)
-- 달력 팝오버로 임의 날짜 점프
+- 달력 팝오버로 임의 날짜 점프 (2차 QoL)
 - 낙관적 업데이트(`useOptimistic`)로 토글 반응성 끌어올리기
 - 다크 모드, 정렬 등 2차 QoL 이식
 

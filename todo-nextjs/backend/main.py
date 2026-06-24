@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # ---------------------------------------------------------------------------
@@ -112,6 +112,13 @@ class TodoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TodoCount(BaseModel):
+    """`GET /todos/counts` 응답 항목 (주간 뷰용 날짜별 개수)."""
+
+    date: str
+    count: int
+
+
 # ---------------------------------------------------------------------------
 # 4. FastAPI 앱 + CORS
 # ---------------------------------------------------------------------------
@@ -180,6 +187,27 @@ def list_todos(
         query = query.filter(Todo.title.ilike(f"%{search}%"))
 
     return query.order_by(Todo.created_at.asc()).all()
+
+
+@app.get("/todos/counts", response_model=list[TodoCount])
+def todo_counts(
+    db: Session = Depends(get_db),
+    # `from`은 Python 예약어라 함수 파라미터명은 `from_`을 쓰고 alias로 매핑한다.
+    from_: str = Query(..., alias="from", pattern=DATE_PATTERN),
+    to: str = Query(..., pattern=DATE_PATTERN),
+) -> list[TodoCount]:
+    """
+    [from, to] 범위(양 끝 포함) 안의 날짜별 Todo 개수를 반환한다 (주간 뷰).
+    개수가 0인 날짜는 응답에 포함되지 않으므로, 클라이언트가 7일을 표시할 때
+    빠진 날짜는 0으로 채워야 한다.
+    """
+    rows = (
+        db.query(Todo.date, func.count(Todo.id))
+        .filter(Todo.date >= from_, Todo.date <= to)
+        .group_by(Todo.date)
+        .all()
+    )
+    return [TodoCount(date=date, count=count) for date, count in rows]
 
 
 @app.post("/todos", response_model=TodoOut, status_code=status.HTTP_201_CREATED)
