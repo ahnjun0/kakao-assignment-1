@@ -81,13 +81,17 @@ npm run dev                  # http://localhost:3000
 - [x] 도전 1: 서버 기반 상태 필터링 (URL `?filter=` + FastAPI Literal 쿼리)
 - [x] 도전 2: 서버 기반 검색 + 300ms 디바운스 (URL `?search=` + FastAPI ilike, filter와 동시 적용 가능)
 
+### 2차 연속성 추가 작업
+
+- [x] **일간 뷰 (2차 미션 4 이식)**: `Todo.date` 컬럼 추가, 날짜 헤더(이전/오늘/다음), URL `?date=YYYY-MM-DD` 동기화, 생성 시 현재 보고 있는 날짜에 자동 귀속. `date` / `filter` / `search`가 모두 동시 적용 가능.
+
 ---
 
 ## Server / Client Component 구분
 
 | 파일 | 종류 | 이유 |
 |---|---|---|
-| `app/page.tsx` | Server | 정적 안내 페이지, 인터랙션 없음 |
+| `app/page.tsx` | Server | `/todos`로 즉시 redirect만 수행 |
 | `app/todos/page.tsx` | Server | FastAPI를 서버에서 직접 fetch, searchParams로 서버 측 필터링 |
 | `app/todos/new/page.tsx` | Server | `TodoForm`(Client)만 렌더 |
 | `app/todos/[todoId]/page.tsx` | Server | 단건 데이터를 서버에서 패치 후 폼에 props |
@@ -97,6 +101,7 @@ npm run dev                  # http://localhost:3000
 | `_components/TodoForm.tsx` | **Client** | useState 입력 / submit / useRouter |
 | `_components/FilterTabs.tsx` | **Client** | useSearchParams, useRouter, 탭 onClick |
 | `_components/SearchBar.tsx` | **Client** | useState + useEffect 디바운스, useSearchParams |
+| `_components/DateHeader.tsx` | **Client** | 이전/오늘/다음 onClick, useSearchParams/useRouter |
 
 ## `route.ts` vs `actions.ts`
 
@@ -123,9 +128,10 @@ npm run dev                  # http://localhost:3000
 
 ### 다음에 시도해보고 싶은 것
 
-- 2차의 일간/주간 뷰를 서버 모델에 반영 (Todo에 `date` 컬럼 추가)
+- 2차의 주간 뷰 이식 (날짜별 카운트, 주차 이동)
+- 달력 팝오버로 임의 날짜 점프
 - 낙관적 업데이트(`useOptimistic`)로 토글 반응성 끌어올리기
-- 다크 모드, 정렬, 달력 팝오버 등 2차 QoL 이식
+- 다크 모드, 정렬 등 2차 QoL 이식
 
 ---
 

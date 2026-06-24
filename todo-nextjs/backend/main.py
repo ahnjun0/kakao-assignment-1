@@ -7,18 +7,16 @@
 - 요청/응답 스키마 (`TodoCreate`, `TodoUpdate`, `TodoOut`)
 - CORS 미들웨어 (Next.js dev 서버가 직접 호출하는 경우 대비)
 - DB 세션 의존성 (`get_db`)
-- CRUD 엔드포인트 (GET / POST / PUT / DELETE)
-
-가이드 권장대로 단일 파일에 담는다. 미션 6에서 DATABASE_URL을 .env.local로 분리.
+- CRUD 엔드포인트 (GET / POST / PUT / DELETE) + 일간 뷰용 date 필터
 """
 
 import os
+import re
+from datetime import date as date_type
 from datetime import datetime, timezone
-from typing import Generator
+from typing import Generator, Literal
 
 from dotenv import load_dotenv
-from typing import Literal
-
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,12 +27,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # 1. DB 설정
 # ---------------------------------------------------------------------------
 
-# .env.local을 우선 로드한다 (없으면 무시).
-# python-dotenv는 기본적으로 .env를 찾으므로 파일명을 명시한다.
 load_dotenv(".env.local")
 
-# DATABASE_URL은 .env.local에 반드시 설정되어 있어야 한다 (.env.local.example 참고).
-# check_same_thread=False는 SQLite + FastAPI(스레드) 조합에서 표준 권장 설정.
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError(
@@ -46,7 +40,6 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
 )
 
-# 세션 팩토리: 요청마다 한 번씩 생성/종료한다 (get_db 참고).
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -60,14 +53,16 @@ class Base(DeclarativeBase):
 
 
 class Todo(Base):
-    """Todo 한 건을 표현하는 테이블."""
+    """Todo 한 건. date(YYYY-MM-DD)로 일간 뷰에 귀속된다."""
 
     __tablename__ = "todos"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     completed = Column(Boolean, nullable=False, default=False)
-    # 정렬용. 클라이언트가 직접 만지지 않고 서버가 자동 기록한다.
+    # 사용자가 선택한 '귀속 날짜'. YYYY-MM-DD 문자열로 저장.
+    # 인덱스를 두는 이유: 일간 뷰가 date 필터를 매번 건다.
+    date = Column(String, nullable=False, index=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -75,37 +70,45 @@ class Todo(Base):
     )
 
 
-# 앱 시작 시 테이블이 없으면 생성한다. 학습 과제 규모라 마이그레이션 도구 없이 충분.
 Base.metadata.create_all(bind=engine)
 
 
 # ---------------------------------------------------------------------------
-# 3. Pydantic 스키마 (요청/응답)
+# 3. Pydantic 스키마
 # ---------------------------------------------------------------------------
+
+# YYYY-MM-DD 형식만 허용한다. 잘못된 형식은 Pydantic 단계에서 차단.
+DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
+_date_regex = re.compile(DATE_PATTERN)
+
+
+def _today_str() -> str:
+    """서버 로컬 기준 오늘 날짜. (UTC 변환을 피하기 위해 datetime.now().date() 사용)"""
+    return datetime.now().date().isoformat()
 
 
 class TodoCreate(BaseModel):
-    """POST /todos 요청 본문."""
+    """POST /todos 요청 본문. date를 안 주면 서버가 오늘 날짜로 채운다."""
 
     title: str = Field(min_length=1, max_length=200)
+    date: str | None = Field(default=None, pattern=DATE_PATTERN)
 
 
 class TodoUpdate(BaseModel):
-    """PUT /todos/{id} 요청 본문. 두 필드 모두 선택적으로 보낼 수 있다."""
+    """PUT /todos/{id} 요청 본문. 모든 필드 선택적."""
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
     completed: bool | None = None
+    date: str | None = Field(default=None, pattern=DATE_PATTERN)
 
 
 class TodoOut(BaseModel):
-    """모든 응답에서 공통으로 쓰는 출력 스키마."""
-
     id: int
     title: str
     completed: bool
+    date: str
     created_at: datetime
 
-    # ORM 인스턴스를 그대로 직렬화하기 위한 설정 (Pydantic v2).
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -113,10 +116,8 @@ class TodoOut(BaseModel):
 # 4. FastAPI 앱 + CORS
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Todo API", version="0.2.0")
+app = FastAPI(title="Todo API", version="0.3.0")
 
-# Next.js 클라이언트 컴포넌트가 직접 호출하는 경우(브라우저 → FastAPI)를 대비.
-# 일반 흐름은 Next.js route.ts 프록시를 거치지만, 안전망으로 명시적으로 허용한다.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -132,10 +133,6 @@ app.add_middleware(
 
 
 def get_db() -> Generator[Session, None, None]:
-    """
-    요청 단위로 SQLAlchemy 세션을 열고, 응답이 끝나면 닫는다.
-    FastAPI의 Depends를 통해 각 엔드포인트에 주입된다.
-    """
     db = SessionLocal()
     try:
         yield db
@@ -150,7 +147,6 @@ def get_db() -> Generator[Session, None, None]:
 
 @app.get("/")
 def root() -> dict[str, str]:
-    """간단한 헬스 체크. 미션 2 때 만든 응답을 유지한다."""
     return {"message": "Hello World"}
 
 
@@ -159,23 +155,28 @@ def list_todos(
     db: Session = Depends(get_db),
     filter: Literal["all", "active", "completed"] = Query(default="all"),
     search: str | None = Query(default=None),
+    date: str | None = Query(default=None, pattern=DATE_PATTERN),
 ) -> list[Todo]:
     """
     Todo 목록을 created_at 오름차순으로 반환한다.
 
     서버 측에서 직접 필터링한다:
+    - `date` (일간 뷰): YYYY-MM-DD. 해당 날짜에 귀속된 Todo만.
     - `filter` (도전 1): all / active / completed
-    - `search` (도전 2): title에 키워드가 포함된 항목만. 대소문자 구분 없음(ilike).
-    두 조건은 동시에 적용 가능 (예: ?filter=active&search=보고서).
+    - `search` (도전 2): title ilike 부분 일치
+    세 조건은 동시에 적용 가능 (예: ?date=2026-06-24&filter=active&search=보고서).
     """
     query = db.query(Todo)
+
+    if date:
+        query = query.filter(Todo.date == date)
+
     if filter == "active":
         query = query.filter(Todo.completed.is_(False))
     elif filter == "completed":
         query = query.filter(Todo.completed.is_(True))
 
     if search:
-        # SQLAlchemy ilike: 대소문자 구분 없는 부분 일치.
         query = query.filter(Todo.title.ilike(f"%{search}%"))
 
     return query.order_by(Todo.created_at.asc()).all()
@@ -183,8 +184,12 @@ def list_todos(
 
 @app.post("/todos", response_model=TodoOut, status_code=status.HTTP_201_CREATED)
 def create_todo(payload: TodoCreate, db: Session = Depends(get_db)) -> Todo:
-    """새 Todo를 만든다. title은 Pydantic 단계에서 빈 문자열을 거른다."""
-    todo = Todo(title=payload.title.strip(), completed=False)
+    """새 Todo를 만든다. date가 비어 있으면 서버 오늘 날짜로 채운다."""
+    todo = Todo(
+        title=payload.title.strip(),
+        completed=False,
+        date=payload.date or _today_str(),
+    )
     db.add(todo)
     db.commit()
     db.refresh(todo)
@@ -197,7 +202,6 @@ def update_todo(
     payload: TodoUpdate,
     db: Session = Depends(get_db),
 ) -> Todo:
-    """Todo의 title 또는 completed를 부분 수정한다."""
     todo = db.get(Todo, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -206,6 +210,8 @@ def update_todo(
         todo.title = payload.title.strip()
     if payload.completed is not None:
         todo.completed = payload.completed
+    if payload.date is not None:
+        todo.date = payload.date
 
     db.commit()
     db.refresh(todo)
@@ -214,7 +220,6 @@ def update_todo(
 
 @app.delete("/todos/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_todo(todo_id: int, db: Session = Depends(get_db)) -> None:
-    """Todo를 삭제한다. 없는 id면 404."""
     todo = db.get(Todo, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")

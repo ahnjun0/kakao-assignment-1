@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { createTodo, updateTodo } from "@/app/actions";
+import { parseLocalDate, todayString } from "@/app/lib/dateFormat";
 
 type Mode = "create" | "edit";
 
@@ -28,9 +29,14 @@ interface Props {
 export default function TodoForm({ mode, todoId, initialTitle = "" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // 폼 제출 후 목록으로 돌아갈 때 기존 필터/검색 상태를 유지하기 위해 보존한다.
+  // 폼 제출 후 목록으로 돌아갈 때 기존 필터/검색/날짜 상태를 유지하기 위해 보존한다.
   const queryString = searchParams.toString();
   const listHref = queryString ? `/todos?${queryString}` : "/todos";
+  // 생성 모드에서 URL의 ?date=가 있으면 그 날짜에 귀속시킨다 (일간 뷰 연동).
+  // 없거나 형식이 잘못되면 오늘로 폴백.
+  const urlDate = searchParams.get("date");
+  const targetDate =
+    urlDate && parseLocalDate(urlDate) ? urlDate : todayString();
   const [title, setTitle] = useState(initialTitle);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -47,7 +53,7 @@ export default function TodoForm({ mode, todoId, initialTitle = "" }: Props) {
     startTransition(async () => {
       try {
         if (mode === "create") {
-          await createTodo(trimmed);
+          await createTodo(trimmed, targetDate);
         } else if (mode === "edit" && todoId !== undefined) {
           await updateTodo(todoId, { title: trimmed });
         }

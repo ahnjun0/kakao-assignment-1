@@ -33,19 +33,22 @@ async function callBackend(
   return response;
 }
 
-export async function createTodo(title: string): Promise<void> {
+export async function createTodo(
+  title: string,
+  date?: string,
+): Promise<void> {
+  // date를 받으면 그날에 귀속, 안 보내면 백엔드가 서버 오늘로 채운다.
   await callBackend("/todos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, date }),
   });
-  // /todos 페이지의 fetch 결과를 무효화해 새 항목이 즉시 보이도록 한다.
   revalidatePath("/todos");
 }
 
 export async function updateTodo(
   todoId: number,
-  payload: { title?: string; completed?: boolean },
+  payload: { title?: string; completed?: boolean; date?: string },
 ): Promise<void> {
   await callBackend(`/todos/${todoId}`, {
     method: "PUT",
