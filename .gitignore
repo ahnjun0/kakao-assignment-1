@@ -9,3 +9,20 @@ node_modules/
 *.md
 !README.md
 !**/README.md
+
+# Next.js (3차 frontend)
+**/.next/
+**/.env.local
+**/.env*.local
+next-env.d.ts
+
+# Python / FastAPI (3차 backend)
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# SQLite DB (3차 backend)
+*.db
+*.sqlite
+*.sqlite3
