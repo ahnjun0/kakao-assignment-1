@@ -1,22 +1,11 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
 /**
- * 루트 페이지. 별도 콘텐츠 없이 /todos로 안내한다.
- * Server Component(기본)로 둔다 — 인터랙션이 없으므로 "use client" 불필요.
+ * 루트 페이지(`/`).
+ * 본 앱은 `/todos`가 사실상 첫 화면이므로 별도 안내 페이지 없이 즉시 리다이렉트한다.
+ * Server Component(기본)에서 호출하는 redirect 헬퍼라 클라이언트 점프가 아닌
+ * 서버 응답 단계의 302/307 리다이렉트로 처리된다.
  */
 export default function Home() {
-  return (
-    <section className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-      <h1 className="text-3xl font-semibold text-primary">Todo 풀스택</h1>
-      <p className="text-zinc-600">
-        Next.js App Router + FastAPI로 만든 3차 과제 Todo 앱입니다.
-      </p>
-      <Link
-        href="/todos"
-        className="rounded-full bg-primary px-6 py-3 text-white transition hover:opacity-90"
-      >
-        Todo 목록 보기
-      </Link>
-    </section>
-  );
+  redirect("/todos");
 }
